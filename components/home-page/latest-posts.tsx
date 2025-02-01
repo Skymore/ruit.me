@@ -31,7 +31,7 @@ export function LatestPosts({
             )}
             onClick={() => setView('posts')}
           >
-            <GrowingUnderline data-umami-event="latest-posts">posts</GrowingUnderline>
+            <GrowingUnderline data-umami-event="latest-posts">Posts</GrowingUnderline>
           </button>
           <span className="mx-1">/</span>
           <button
@@ -43,7 +43,7 @@ export function LatestPosts({
             )}
             onClick={() => setView('snippets')}
           >
-            <GrowingUnderline data-umami-event="latest-snippets">snippets</GrowingUnderline>
+            <GrowingUnderline data-umami-event="latest-snippets">Snippets</GrowingUnderline>
           </button>
         </div>
         <div className="flex items-center justify-end text-base font-medium leading-6">

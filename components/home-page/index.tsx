@@ -8,6 +8,7 @@ import { Intro } from './intro'
 import { LatestPosts } from './latest-posts'
 import { BlogLinks } from './links'
 import { TypedBios } from './typed-bios'
+import { LatestProjects } from './latest-projects'
 
 export function Home({
   posts,
@@ -31,7 +32,7 @@ export function Home({
             </div>
             <BlogLinks />
             <p className="my-6 flex md:my-8">
-              <span className="mr-2">Welcome to my blog</span>
+              <span className="mr-2">Welcome to my portfolio</span>
               <Twemoji emoji="rocket" />
             </p>
           </div>
@@ -40,6 +41,7 @@ export function Home({
           <ProfileCard />
         </div>
       </div>
+      <LatestProjects />
       <LatestPosts posts={posts} snippets={snippets} />
       {/* {SITE_METADATA.newsletter?.provider && (
         <div className="flex items-center justify-center py-4 lg:py-10">
