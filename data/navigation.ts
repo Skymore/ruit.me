@@ -19,7 +19,7 @@ export const FOOTER_NAV_LINKS = [
 
 export const FOOTER_PERSONAL_STUFF = [
   { href: '/about', title: 'About' },
-  { href: '/static/resume.pdf', title: 'Resume' },
+  { href: SITE_METADATA.resumeUrl, title: 'Resume' },
   { href: 'https://github.com/skymore', title: 'GitHub' },
   { href: 'https://www.linkedin.com/in/ruit/', title: 'LinkedIn' },
   { href: 'https://www.youtube.com/@realruitao', title: 'YouTube' },

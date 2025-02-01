@@ -17,6 +17,7 @@ export const SITE_METADATA = {
   x: 'https://x.com/Rui1223456',
   locale: 'en-US',
   stickyNav: true,
+  resumeUrl: process.env.NEXT_PUBLIC_RESUME_URL || '/static/resume.pdf', // Cloud storage URL for resume, fallback to local file
   goodreadsFeedUrl: 'https://www.goodreads.com/review/list_rss/10000000000000000000',
   goodreadsBookshelfUrl: 'https://www.goodreads.com/review/list/your-user-id',
   imdbRatingsList: 'https://www.imdb.com/user/your-user-id/ratings',
@@ -53,4 +54,4 @@ export const SITE_METADATA = {
       searchDocumentsPath: `${process.env.BASE_PATH || ''}/search.json`,
     },
   },
-}
+} as const

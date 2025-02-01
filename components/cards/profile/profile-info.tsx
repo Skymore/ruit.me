@@ -2,6 +2,7 @@ import { SITE_METADATA } from '~/data/site-metadata'
 import { BriefcaseBusiness, Github, Linkedin, Mail, MapPin, Youtube, FileText } from 'lucide-react'
 import { Fragment } from 'react'
 import { Twemoji } from '~/components/ui/twemoji'
+import { SOCIALS } from '~/data/socials'
 
 function getAccountHandle(url = '') {
   let lastPart = url.split('/').pop()
@@ -79,7 +80,7 @@ export function ProfileCardInfo() {
         <div className="flex items-center text-gray-700 dark:text-gray-200">
           <FileText strokeWidth={1.5} size={20} />
           <a
-            href="/static/resume.pdf"
+            href={SITE_METADATA.resumeUrl}
             target="_blank"
             className="px-2 hover:text-primary-500 dark:hover:text-primary-400"
             data-umami-event="profile-card-resume"
