@@ -1,0 +1,292 @@
+---
+heading: 'Speech Recognition Service'
+title: 'Implementing a Scalable Speech Recognition Service'
+date: '2025-01-28'
+icon: 'Typescript'
+tags: ['typescript', 'websocket', 'speech-recognition', 'nestjs']
+draft: false
+summary: 'A complete implementation of a speech recognition service with TypeScript and NestJS, including WebSocket handling, error recovery, and multiple provider support.'
+---
+
+## Service Interface
+
+First, define the core interfaces:
+
+```typescript
+interface RecognitionResult {
+  text: string;
+  isFinal: boolean;
+  confidence: number;
+}
+
+interface IRecognitionConfig {
+  languageCode: string;
+  sampleRate: number;
+  encoding: 'LINEAR16' | 'FLAC' | 'MULAW';
+}
+
+interface IRecognitionService {
+  startRecognition(config: IRecognitionConfig): Promise<void>;
+  stopRecognition(): void;
+  onRecognitionResult(callback: (result: RecognitionResult) => void): void;
+  onError(callback: (error: Error) => void): void;
+  processAudioData(data: Buffer): Promise<void>;
+}
+```
+
+## Base Recognition Service
+
+Create a base class for common functionality:
+
+```typescript
+abstract class BaseRecognitionService implements IRecognitionService {
+  protected config: IRecognitionConfig;
+  protected resultCallback: (result: RecognitionResult) => void;
+  protected errorCallback: (error: Error) => void;
+  protected retryCount = 0;
+  protected readonly MAX_RETRIES = 3;
+  protected isProcessing = false;
+
+  constructor(config: Partial<IRecognitionConfig>) {
+    this.config = {
+      languageCode: 'en-US',
+      sampleRate: 16000,
+      encoding: 'LINEAR16',
+      ...config
+    };
+  }
+
+  abstract startRecognition(config?: IRecognitionConfig): Promise<void>;
+  abstract stopRecognition(): void;
+  abstract processAudioData(data: Buffer): Promise<void>;
+
+  onRecognitionResult(callback: (result: RecognitionResult) => void): void {
+    this.resultCallback = callback;
+  }
+
+  onError(callback: (error: Error) => void): void {
+    this.errorCallback = callback;
+  }
+
+  protected async handleError(error: Error) {
+    console.error('Recognition error:', error);
+    
+    if (this.retryCount < this.MAX_RETRIES) {
+      this.retryCount++;
+      await this.reconnect();
+    } else {
+      this.errorCallback?.(error);
+    }
+  }
+
+  protected async reconnect() {
+    try {
+      await this.stopRecognition();
+      await this.startRecognition(this.config);
+      this.retryCount = 0;
+    } catch (error) {
+      this.handleError(error as Error);
+    }
+  }
+}
+```
+
+## Google Speech Recognition Implementation
+
+Implement Google Cloud Speech-to-Text service:
+
+```typescript
+import { SpeechClient } from '@google-cloud/speech';
+
+export class GoogleSpeechService extends BaseRecognitionService {
+  private client: SpeechClient;
+  private recognizeStream: any;
+
+  constructor(config: Partial<IRecognitionConfig>) {
+    super(config);
+    this.client = new SpeechClient();
+  }
+
+  async startRecognition(config?: IRecognitionConfig): Promise<void> {
+    if (config) {
+      this.config = { ...this.config, ...config };
+    }
+
+    const recognizeConfig = {
+      encoding: this.config.encoding,
+      sampleRateHertz: this.config.sampleRate,
+      languageCode: this.config.languageCode,
+      enableAutomaticPunctuation: true,
+      model: 'latest_long',
+      useEnhanced: true,
+    };
+
+    this.recognizeStream = this.client
+      .streamingRecognize(recognizeConfig)
+      .on('error', (error) => this.handleError(error))
+      .on('data', (data) => {
+        if (data.results[0]) {
+          this.resultCallback?.({
+            text: data.results[0].alternatives[0].transcript,
+            isFinal: data.results[0].isFinal,
+            confidence: data.results[0].alternatives[0].confidence
+          });
+        }
+      });
+
+    this.isProcessing = true;
+  }
+
+  stopRecognition(): void {
+    if (this.recognizeStream) {
+      this.recognizeStream.end();
+      this.recognizeStream = null;
+    }
+    this.isProcessing = false;
+  }
+
+  async processAudioData(data: Buffer): Promise<void> {
+    if (!this.isProcessing || !this.recognizeStream) {
+      await this.startRecognition();
+    }
+
+    try {
+      this.recognizeStream.write(data);
+    } catch (error) {
+      await this.handleError(error as Error);
+    }
+  }
+}
+```
+
+## Baidu Speech Recognition Implementation
+
+Implement Baidu Speech Recognition service:
+
+```typescript
+import { BaiduAipSpeech } from 'baidu-aip-sdk';
+
+export class BaiduSpeechService extends BaseRecognitionService {
+  private client: BaiduAipSpeech;
+  private audioBuffer: Buffer[] = [];
+  private processingInterval: NodeJS.Timeout | null = null;
+
+  constructor(config: {
+    appId: string;
+    apiKey: string;
+    secretKey: string;
+    recognitionConfig?: Partial<IRecognitionConfig>;
+  }) {
+    super(config.recognitionConfig);
+    this.client = new BaiduAipSpeech(config.appId, config.apiKey, config.secretKey);
+  }
+
+  async startRecognition(config?: IRecognitionConfig): Promise<void> {
+    if (config) {
+      this.config = { ...this.config, ...config };
+    }
+
+    this.processingInterval = setInterval(() => {
+      this.processBufferedAudio();
+    }, 160); // Process every 160ms
+
+    this.isProcessing = true;
+  }
+
+  stopRecognition(): void {
+    if (this.processingInterval) {
+      clearInterval(this.processingInterval);
+      this.processingInterval = null;
+    }
+    this.audioBuffer = [];
+    this.isProcessing = false;
+  }
+
+  async processAudioData(data: Buffer): Promise<void> {
+    if (!this.isProcessing) {
+      await this.startRecognition();
+    }
+
+    this.audioBuffer.push(data);
+  }
+
+  private async processBufferedAudio() {
+    if (this.audioBuffer.length === 0) return;
+
+    const audioData = Buffer.concat(this.audioBuffer);
+    this.audioBuffer = [];
+
+    try {
+      const result = await this.client.recognize(audioData.toString('base64'), 'pcm', this.config.sampleRate, {
+        dev_pid: this.getDevPid(this.config.languageCode)
+      });
+
+      if (result.err_no === 0 && result.result) {
+        this.resultCallback?.({
+          text: result.result[0],
+          isFinal: true,
+          confidence: 1.0
+        });
+      } else {
+        throw new Error(`Recognition failed: ${result.err_msg}`);
+      }
+    } catch (error) {
+      await this.handleError(error as Error);
+    }
+  }
+
+  private getDevPid(languageCode: string): number {
+    // Map language codes to Baidu dev_pid
+    const pidMap: Record<string, number> = {
+      'zh-CN': 1537, // 普通话
+      'en-US': 1737, // English
+      'zh-CN-medical': 1537, // 医疗领域
+    };
+    return pidMap[languageCode] || 1537;
+  }
+}
+```
+
+## Usage Example
+
+Here's how to use these services:
+
+```typescript
+// Create and configure the service
+const googleService = new GoogleSpeechService({
+  languageCode: 'en-US',
+  sampleRate: 16000
+});
+
+// Start recognition
+await googleService.startRecognition();
+
+// Handle results
+googleService.onRecognitionResult((result) => {
+  console.log(`Recognized: ${result.text}`);
+  console.log(`Confidence: ${result.confidence}`);
+  console.log(`Is Final: ${result.isFinal}`);
+});
+
+// Handle errors
+googleService.onError((error) => {
+  console.error('Recognition error:', error);
+});
+
+// Process audio data
+const audioData: Buffer = getAudioData(); // Your audio data source
+await googleService.processAudioData(audioData);
+
+// Stop recognition when done
+googleService.stopRecognition();
+```
+
+## Notes
+
+- Remember to handle API credentials securely
+- Implement proper error handling and retry logic
+- Monitor service performance and resource usage
+- Consider implementing rate limiting
+- Add logging for debugging and monitoring
+- Test with different audio formats and quality
+- Handle network interruptions gracefully 

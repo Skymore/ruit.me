@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="120" height="120" rx="12" fill="#2D3748"/>
+  
+  <!-- Camera Icon -->
+  <path d="M80 40H40C35.5817 40 32 43.5817 32 48V72C32 76.4183 35.5817 80 40 80H80C84.4183 80 88 76.4183 88 72V48C88 43.5817 84.4183 40 80 40Z" fill="#4A5568"/>
+  <circle cx="60" cy="60" r="12" fill="#48BB78"/>
+  
+  <!-- Car Silhouette -->
+  <path d="M45 65H75M48 70H72" stroke="#4299E1" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Analysis Lines -->
+  <line x1="30" y1="50" x2="90" y2="50" stroke="#ED8936" stroke-width="1" stroke-dasharray="4 2"/>
+  <line x1="30" y1="70" x2="90" y2="70" stroke="#ED8936" stroke-width="1" stroke-dasharray="4 2"/>
+</svg> 

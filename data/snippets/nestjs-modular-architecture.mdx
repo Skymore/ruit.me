@@ -1,0 +1,342 @@
+---
+heading: 'NestJS Modular Architecture'
+title: 'Building Modular NestJS Applications'
+date: '2025-01-27'
+icon: 'Node'
+tags: ['nestjs', 'typescript', 'architecture', 'design-patterns']
+draft: false
+summary: 'A comprehensive guide to building modular NestJS applications using best practices, including module organization, dependency injection, and service design.'
+---
+
+## Core Module Structure
+
+First, let's set up the core module structure:
+
+```typescript
+// core/core.module.ts
+import { Global, Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { LoggerService } from './services/logger.service';
+import { DatabaseService } from './services/database.service';
+import { CacheService } from './services/cache.service';
+
+@Global()
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: ['.env.local', '.env']
+    })
+  ],
+  providers: [
+    LoggerService,
+    DatabaseService,
+    CacheService
+  ],
+  exports: [
+    LoggerService,
+    DatabaseService,
+    CacheService
+  ]
+})
+export class CoreModule {}
+
+// core/services/logger.service.ts
+import { Injectable } from '@nestjs/common';
+import { createLogger, format, transports } from 'winston';
+import DailyRotateFile from 'winston-daily-rotate-file';
+
+@Injectable()
+export class LoggerService {
+  private logger;
+
+  constructor() {
+    this.logger = createLogger({
+      format: format.combine(
+        format.timestamp(),
+        format.json()
+      ),
+      transports: [
+        new transports.Console({
+          format: format.combine(
+            format.colorize(),
+            format.simple()
+          )
+        }),
+        new DailyRotateFile({
+          filename: 'logs/application-%DATE%.log',
+          datePattern: 'YYYY-MM-DD',
+          maxSize: '20m',
+          maxFiles: '14d'
+        })
+      ]
+    });
+  }
+
+  log(level: string, message: string, meta?: any) {
+    this.logger.log(level, message, meta);
+  }
+}
+```
+
+## Feature Module Example
+
+Here's an example of a feature module:
+
+```typescript
+// features/users/users.module.ts
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { User } from './entities/user.entity';
+import { UsersController } from './users.controller';
+import { UsersService } from './users.service';
+import { UserRepository } from './repositories/user.repository';
+import { UserEventsSubscriber } from './subscribers/user-events.subscriber';
+
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([User])
+  ],
+  controllers: [UsersController],
+  providers: [
+    UsersService,
+    UserRepository,
+    UserEventsSubscriber
+  ],
+  exports: [UsersService]
+})
+export class UsersModule {}
+
+// features/users/entities/user.entity.ts
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn
+} from 'typeorm';
+
+@Entity('users')
+export class User {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ unique: true })
+  email: string;
+
+  @Column()
+  passwordHash: string;
+
+  @Column({ nullable: true })
+  name: string;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+}
+
+// features/users/repositories/user.repository.ts
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { User } from '../entities/user.entity';
+
+@Injectable()
+export class UserRepository {
+  constructor(
+    @InjectRepository(User)
+    private repository: Repository<User>
+  ) {}
+
+  async findById(id: string): Promise<User> {
+    return this.repository.findOne({ where: { id } });
+  }
+
+  async findByEmail(email: string): Promise<User> {
+    return this.repository.findOne({ where: { email } });
+  }
+
+  async create(data: Partial<User>): Promise<User> {
+    const user = this.repository.create(data);
+    return this.repository.save(user);
+  }
+}
+```
+
+## Shared Module Example
+
+Create a shared module for common functionality:
+
+```typescript
+// shared/shared.module.ts
+import { Module } from '@nestjs/common';
+import { ValidationService } from './services/validation.service';
+import { UtilsService } from './services/utils.service';
+import { CommonPipe } from './pipes/common.pipe';
+import { TimeoutInterceptor } from './interceptors/timeout.interceptor';
+
+@Module({
+  providers: [
+    ValidationService,
+    UtilsService,
+    CommonPipe,
+    TimeoutInterceptor
+  ],
+  exports: [
+    ValidationService,
+    UtilsService,
+    CommonPipe,
+    TimeoutInterceptor
+  ]
+})
+export class SharedModule {}
+
+// shared/services/validation.service.ts
+import { Injectable } from '@nestjs/common';
+import { validate } from 'class-validator';
+
+@Injectable()
+export class ValidationService {
+  async validateObject<T extends object>(obj: T): Promise<string[]> {
+    const errors = await validate(obj);
+    return errors.map(error => Object.values(error.constraints)).flat();
+  }
+}
+
+// shared/interceptors/timeout.interceptor.ts
+import {
+  Injectable,
+  NestInterceptor,
+  ExecutionContext,
+  CallHandler,
+  RequestTimeoutException
+} from '@nestjs/common';
+import { Observable, throwError, TimeoutError } from 'rxjs';
+import { catchError, timeout } from 'rxjs/operators';
+
+@Injectable()
+export class TimeoutInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    return next.handle().pipe(
+      timeout(5000),
+      catchError(err => {
+        if (err instanceof TimeoutError) {
+          return throwError(() => new RequestTimeoutException());
+        }
+        return throwError(() => err);
+      }),
+    );
+  }
+}
+```
+
+## Application Module Configuration
+
+Configure the main application module:
+
+```typescript
+// app.module.ts
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { CoreModule } from './core/core.module';
+import { SharedModule } from './shared/shared.module';
+import { UsersModule } from './features/users/users.module';
+import { AuthModule } from './features/auth/auth.module';
+import { ConfigService } from '@nestjs/config';
+
+@Module({
+  imports: [
+    TypeOrmModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        type: 'postgres',
+        host: config.get('DB_HOST'),
+        port: config.get('DB_PORT'),
+        username: config.get('DB_USERNAME'),
+        password: config.get('DB_PASSWORD'),
+        database: config.get('DB_DATABASE'),
+        entities: ['dist/**/*.entity{.ts,.js}'],
+        synchronize: config.get('NODE_ENV') !== 'production',
+        logging: config.get('DB_LOGGING', false)
+      })
+    }),
+    CoreModule,
+    SharedModule,
+    UsersModule,
+    AuthModule
+  ]
+})
+export class AppModule {}
+
+// main.ts
+import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
+import { AppModule } from './app.module';
+import { TimeoutInterceptor } from './shared/interceptors/timeout.interceptor';
+import { LoggerService } from './core/services/logger.service';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule, {
+    logger: false
+  });
+
+  // Global configurations
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true,
+    transform: true
+  }));
+  app.useGlobalInterceptors(new TimeoutInterceptor());
+
+  // Custom logger
+  const logger = app.get(LoggerService);
+  app.useLogger(logger);
+
+  await app.listen(3000);
+}
+bootstrap();
+```
+
+## Module Organization Best Practices
+
+1. **Core Module**
+   - Global providers
+   - Configuration
+   - Database connections
+   - Logging services
+
+2. **Shared Module**
+   - Common utilities
+   - Shared pipes
+   - Shared interceptors
+   - Validation services
+
+3. **Feature Modules**
+   - Domain-specific logic
+   - Feature controllers
+   - Feature services
+   - Feature entities
+
+4. **Module Dependencies**
+   ```
+   AppModule
+   ├── CoreModule
+   ├── SharedModule
+   └── FeatureModules
+       ├── UsersModule
+       ├── AuthModule
+       └── OtherFeatureModules
+   ```
+
+## Notes
+
+- Keep modules focused and cohesive
+- Use dependency injection
+- Implement proper error handling
+- Follow SOLID principles
+- Use TypeORM decorators correctly
+- Implement proper validation
+- Handle configuration properly
+- Use proper logging
+- Implement proper security measures 

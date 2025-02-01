@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="120" height="120" rx="12" fill="#2D3748"/>
+  
+  <!-- AI Chip Pattern -->
+  <rect x="35" y="35" width="50" height="50" rx="4" fill="#4A5568"/>
+  <path d="M45 45H75M45 60H75M45 75H75" stroke="#48BB78" stroke-width="2"/>
+  <circle cx="45" cy="45" r="3" fill="#4299E1"/>
+  <circle cx="75" cy="75" r="3" fill="#4299E1"/>
+  
+  <!-- Chat Bubbles -->
+  <path d="M30 85L40 75H80C82.2091 75 84 73.2091 84 71V45C84 42.7909 82.2091 41 80 41H40C37.7909 41 36 42.7909 36 45V71C36 73.2091 37.7909 75 40 75H30V85Z" stroke="#ED8936" stroke-width="2" fill="none"/>
+</svg> 

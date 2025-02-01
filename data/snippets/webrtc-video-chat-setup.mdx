@@ -1,0 +1,232 @@
+---
+heading: 'WebRTC Video Chat'
+title: 'WebRTC Video Chat Setup'
+date: '2025-01-29'
+icon: 'Typescript'
+tags: ['webrtc', 'typescript', 'video-chat', 'real-time']
+draft: false
+summary: 'A complete example of setting up WebRTC video chat with TypeScript, including peer connection, media streams, and signaling.'
+---
+
+## Basic WebRTC Setup
+
+```typescript
+class WebRTCService {
+  private peerConnection: RTCPeerConnection;
+  private localStream: MediaStream | null = null;
+  private remoteStream: MediaStream | null = null;
+
+  constructor() {
+    this.peerConnection = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        {
+          urls: 'turn:your-turn-server.com',
+          username: process.env.TURN_USERNAME,
+          credential: process.env.TURN_CREDENTIAL
+        }
+      ]
+    });
+
+    // Set up event handlers
+    this.setupEventHandlers();
+  }
+
+  private setupEventHandlers() {
+    // Handle ICE candidate events
+    this.peerConnection.onicecandidate = (event) => {
+      if (event.candidate) {
+        // Send the candidate to the remote peer via signaling server
+        this.signalingService.sendIceCandidate(event.candidate);
+      }
+    };
+
+    // Handle connection state changes
+    this.peerConnection.onconnectionstatechange = () => {
+      switch(this.peerConnection.connectionState) {
+        case 'connected':
+          console.log('Peers connected');
+          break;
+        case 'disconnected':
+          console.log('Peers disconnected');
+          break;
+        case 'failed':
+          console.log('Connection failed');
+          break;
+      }
+    };
+
+    // Handle remote stream
+    this.peerConnection.ontrack = (event) => {
+      this.remoteStream = event.streams[0];
+      // Update UI with remote stream
+      this.updateRemoteVideo(this.remoteStream);
+    };
+  }
+
+  async startLocalStream() {
+    try {
+      this.localStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      });
+
+      // Add tracks to peer connection
+      this.localStream.getTracks().forEach(track => {
+        if (this.localStream) {
+          this.peerConnection.addTrack(track, this.localStream);
+        }
+      });
+
+      // Update UI with local stream
+      this.updateLocalVideo(this.localStream);
+    } catch (error) {
+      console.error('Error accessing media devices:', error);
+    }
+  }
+
+  async createOffer() {
+    try {
+      const offer = await this.peerConnection.createOffer();
+      await this.peerConnection.setLocalDescription(offer);
+      
+      // Send the offer to the remote peer via signaling server
+      this.signalingService.sendOffer(offer);
+    } catch (error) {
+      console.error('Error creating offer:', error);
+    }
+  }
+
+  async handleAnswer(answer: RTCSessionDescriptionInit) {
+    try {
+      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+    } catch (error) {
+      console.error('Error handling answer:', error);
+    }
+  }
+
+  async handleIceCandidate(candidate: RTCIceCandidateInit) {
+    try {
+      await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch (error) {
+      console.error('Error adding ICE candidate:', error);
+    }
+  }
+
+  private updateLocalVideo(stream: MediaStream) {
+    const videoElement = document.getElementById('localVideo') as HTMLVideoElement;
+    if (videoElement) {
+      videoElement.srcObject = stream;
+    }
+  }
+
+  private updateRemoteVideo(stream: MediaStream) {
+    const videoElement = document.getElementById('remoteVideo') as HTMLVideoElement;
+    if (videoElement) {
+      videoElement.srcObject = stream;
+    }
+  }
+}
+```
+
+## React Component Implementation
+
+```tsx
+import { useEffect, useRef, useState } from 'react'
+
+export function VideoChat() {
+  const [isConnected, setIsConnected] = useState(false)
+  const webrtcService = useRef<WebRTCService>()
+  
+  useEffect(() => {
+    webrtcService.current = new WebRTCService()
+    
+    // Start local stream
+    webrtcService.current.startLocalStream()
+    
+    return () => {
+      // Cleanup
+      if (webrtcService.current) {
+        // Stop all tracks
+        webrtcService.current.localStream?.getTracks().forEach(track => track.stop())
+      }
+    }
+  }, [])
+  
+  const handleStartCall = async () => {
+    if (webrtcService.current) {
+      await webrtcService.current.createOffer()
+      setIsConnected(true)
+    }
+  }
+  
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      <div className="relative">
+        <video
+          id="localVideo"
+          autoPlay
+          playsInline
+          muted
+          className="w-full rounded-lg"
+        />
+        <span className="absolute bottom-2 left-2 bg-black/50 px-2 py-1 text-white rounded">
+          You
+        </span>
+      </div>
+      <div className="relative">
+        <video
+          id="remoteVideo"
+          autoPlay
+          playsInline
+          className="w-full rounded-lg"
+        />
+        <span className="absolute bottom-2 left-2 bg-black/50 px-2 py-1 text-white rounded">
+          Remote
+        </span>
+      </div>
+      <button
+        onClick={handleStartCall}
+        disabled={isConnected}
+        className="col-span-2 bg-blue-500 text-white px-4 py-2 rounded disabled:bg-gray-300"
+      >
+        {isConnected ? 'Connected' : 'Start Call'}
+      </button>
+    </div>
+  )
+}
+```
+
+## Usage
+
+1. First, create an instance of the WebRTC service:
+```typescript
+const webrtcService = new WebRTCService();
+```
+
+2. Start the local video stream:
+```typescript
+await webrtcService.startLocalStream();
+```
+
+3. To initiate a call (caller side):
+```typescript
+await webrtcService.createOffer();
+```
+
+4. Handle incoming signals (callee side):
+```typescript
+// When receiving an offer
+webrtcService.handleAnswer(answer);
+
+// When receiving ICE candidates
+webrtcService.handleIceCandidate(candidate);
+```
+
+## Notes
+
+- Remember to implement proper signaling server logic
+- Handle cleanup when component unmounts
+- Consider implementing reconnection logic
+- Add error handling for various scenarios
+- Test with different network conditions

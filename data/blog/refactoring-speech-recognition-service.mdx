@@ -1,0 +1,299 @@
+---
+title: 'Refactoring Speech Recognition Service for Multi-client Support'
+date: '2025-01-19'
+tags: ['architecture', 'speech-recognition', 'refactoring', 'python', 'system-design']
+draft: false
+summary: 'A comprehensive guide to refactoring a speech recognition service to handle multiple clients effectively, focusing on architecture improvements and best practices.'
+images: ['/static/images/banners/recording-studio-microphone__melanie__DyAjzGKCXqA.jpeg']
+authors: ['default']
+---
+
+## Introduction
+
+When building real-time speech recognition services, handling multiple clients correctly is crucial. In this article, we'll explore how to refactor a speech recognition service to properly support multiple concurrent clients while maintaining clean architecture and efficient resource management.
+
+## The Problem
+
+### Initial Architecture Issues
+
+The initial implementation of our speech recognition service had a critical architectural flaw: using a singleton pattern for the recognition service caused audio streams from multiple clients to interfere with each other. Here's why this was problematic:
+
+1. **State Confusion**
+   - All clients shared the same recognition service instance
+   - Multiple audio streams were sent to the same recognition stream
+   - Callback functions were overwritten by newly connected clients
+
+2. **Technical Limitations**
+   ```typescript
+   @Injectable()
+   class SpeechRecognitionService {
+       private recognitionStream: any;
+       private resultCallback: (result: any) => void;
+       
+       // This callback would be overwritten by each new client
+       setResultCallback(callback: (result: any) => void) {
+           this.resultCallback = callback;
+       }
+   }
+   ```
+
+### Root Causes
+
+1. **Streaming Nature**
+   - Speech APIs use WebSocket-based streaming
+   - Each stream maintains its own state
+   - Streams are stateful and can't be shared
+
+2. **Service Instance Limitations**
+   - Each recognition service can only maintain one active stream
+   - New audio data affects current stream's results
+   - Multiple clients' audio data contaminate each other's context
+
+3. **NestJS Dependency Injection**
+   ```typescript
+   @Injectable()
+   class SpeechGateway {
+       constructor(
+           // This creates a singleton instance
+           private readonly recognitionService: SpeechRecognitionService
+       ) {}
+   }
+   ```
+
+## The Solution
+
+### 1. Factory Pattern Implementation
+
+Instead of using singleton services, we implement a factory pattern to create dedicated service instances for each client:
+
+```typescript
+@Injectable()
+export class RecognitionFactory {
+    constructor(private configService: ConfigService) {}
+
+    async create(source: RecognitionSource): Promise<IRecognitionService> {
+        const service = source === RecognitionSource.BAIDU
+            ? new BaiduRecognitionService(this.configService)
+            : new GoogleRecognitionService(this.configService);
+        
+        await service.onModuleInit();
+        return service;
+    }
+}
+```
+
+### 2. Modular Architecture
+
+Organize the components into a cohesive module:
+
+```typescript
+@Module({
+    providers: [
+        SpeechGateway,
+        RecognitionFactory,
+        GoogleRecognitionService,
+        BaiduRecognitionService,
+    ],
+    exports: [SpeechGateway],
+})
+export class SpeechModule {}
+```
+
+### 3. Connection Management
+
+Implement proper connection tracking and management:
+
+```typescript
+@WebSocketGateway()
+export class SpeechGateway implements OnModuleInit {
+    private readonly connections = new Map<string, ConnectionInfo>();
+
+    constructor(private factory: RecognitionFactory) {}
+
+    async handleConnection(client: Socket) {
+        const service = await this.factory.create(RecognitionSource.GOOGLE);
+        
+        this.connections.set(client.id, {
+            socket: client,
+            recognitionService: service,
+            config: this.getDefaultConfig()
+        });
+    }
+
+    async handleDisconnect(client: Socket) {
+        const connection = this.connections.get(client.id);
+        if (connection) {
+            await connection.recognitionService.cleanup();
+            this.connections.delete(client.id);
+        }
+    }
+}
+```
+
+## Best Practices
+
+### 1. Dependency Management
+
+Follow these principles for clean dependency management:
+
+```typescript
+// Service interface for better abstraction
+interface IRecognitionService {
+    initialize(): Promise<void>;
+    processAudio(data: Buffer): Promise<void>;
+    cleanup(): Promise<void>;
+}
+
+// Factory method for service creation
+@Injectable()
+class RecognitionFactory {
+    create(config: RecognitionConfig): Promise<IRecognitionService> {
+        // Create and configure service instance
+        return this.createAndConfigure(config);
+    }
+}
+```
+
+### 2. Resource Management
+
+Implement proper resource cleanup:
+
+```typescript
+class BaseRecognitionService implements IRecognitionService {
+    private stream: any;
+    private resources: Resource[] = [];
+
+    async cleanup(): Promise<void> {
+        // Close stream
+        if (this.stream) {
+            await this.stream.close();
+        }
+
+        // Release resources
+        for (const resource of this.resources) {
+            await resource.release();
+        }
+    }
+}
+```
+
+### 3. Error Handling
+
+Implement comprehensive error handling:
+
+```typescript
+class SpeechGateway {
+    private handleError(client: Socket, error: Error) {
+        // Log error
+        this.logger.error({
+            clientId: client.id,
+            error: error.message,
+            stack: error.stack
+        });
+
+        // Notify client
+        client.emit('recognition_error', {
+            message: error.message,
+            code: this.getErrorCode(error)
+        });
+
+        // Cleanup if necessary
+        if (this.isRecoverable(error)) {
+            this.handleRecovery(client);
+        } else {
+            this.handleFatalError(client);
+        }
+    }
+}
+```
+
+## Performance Monitoring
+
+Implement comprehensive monitoring:
+
+```typescript
+class RecognitionMetrics {
+    private readonly metrics = new Map<string, {
+        activeStreams: number;
+        processedAudio: number;
+        errors: number;
+        latency: number[];
+    }>();
+
+    recordMetrics(clientId: string, data: MetricData) {
+        const current = this.metrics.get(clientId) || this.getDefaultMetrics();
+        this.metrics.set(clientId, {
+            ...current,
+            ...data,
+            latency: [...current.latency, data.latency]
+        });
+    }
+
+    getAggregateMetrics() {
+        // Calculate aggregate metrics
+        return this.calculateAggregates(this.metrics);
+    }
+}
+```
+
+## Future Improvements
+
+1. **Connection Limits**
+   ```typescript
+   class ConnectionManager {
+       private readonly MAX_CONNECTIONS = 100;
+       private readonly activeConnections = new Map<string, ConnectionInfo>();
+
+       async addConnection(client: Socket): Promise<boolean> {
+           if (this.activeConnections.size >= this.MAX_CONNECTIONS) {
+               throw new ConnectionLimitError();
+           }
+           // Add connection logic
+       }
+   }
+   ```
+
+2. **Resource Monitoring**
+   ```typescript
+   class ResourceMonitor {
+       private readonly memoryThreshold = 0.8; // 80%
+       
+       checkResources(): boolean {
+           const usage = process.memoryUsage();
+           return usage.heapUsed / usage.heapTotal < this.memoryThreshold;
+       }
+   }
+   ```
+
+3. **Graceful Degradation**
+   ```typescript
+   class ServiceDegrader {
+       private readonly strategies = new Map<ErrorType, DegradationStrategy>();
+
+       handleDegradation(error: Error) {
+           const strategy = this.strategies.get(error.type);
+           if (strategy) {
+               return strategy.execute();
+           }
+           return this.defaultStrategy.execute();
+       }
+   }
+   ```
+
+## Conclusion
+
+Refactoring a speech recognition service to properly handle multiple clients requires careful consideration of architecture, resource management, and error handling. By implementing a factory pattern, proper connection management, and comprehensive monitoring, we can create a robust service that efficiently handles multiple concurrent clients.
+
+Key takeaways:
+1. Use factory pattern for service instances
+2. Implement proper resource management
+3. Handle errors gracefully
+4. Monitor performance and resources
+5. Plan for scalability
+
+## References
+
+- [NestJS Documentation](https://docs.nestjs.com/)
+- [WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket)
+- [Google Cloud Speech-to-Text](https://cloud.google.com/speech-to-text)
+- [Design Patterns](https://refactoring.guru/design-patterns) 

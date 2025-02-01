@@ -1,0 +1,323 @@
+---
+title: 'Deploying Modern Web Application with Nginx and Cloudflare'
+date: '2025-01-17'
+tags: ['deployment', 'nginx', 'cloudflare', 'devops', 'web']
+draft: false
+summary: 'A comprehensive guide to deploying modern web applications using Nginx and Cloudflare, focusing on performance, security, and reliability.'
+images: ['/static/images/banners/black-network-switch-with-cables__thomasjsn__ISG-rUel0Uw.jpeg']
+authors: ['default']
+---
+
+## Introduction
+
+Deploying modern web applications requires a robust and secure infrastructure. This guide explores how to deploy web applications using Nginx as a reverse proxy and Cloudflare for CDN, focusing on performance optimization, security enhancement, and reliability improvement.
+
+## Infrastructure Setup
+
+### Server Configuration
+
+1. **Base Requirements**
+   - Ubuntu Server 22.04 LTS
+   - Nginx 1.18+
+   - Node.js 18+ (for web applications)
+   - SSL certificates
+   - Sufficient RAM and CPU
+
+2. **Directory Structure**
+```bash
+/var/www/
+├── example.com/
+│   ├── html/           # Static files
+│   ├── logs/           # Application logs
+│   └── ssl/            # SSL certificates
+└── nginx/
+    ├── sites-available/
+    └── sites-enabled/
+```
+
+## Nginx Configuration
+
+### Basic Setup
+
+1. **Virtual Host Configuration**
+```nginx
+server {
+    listen 80;
+    listen [::]:80;
+    server_name example.com www.example.com;
+    
+    # Redirect HTTP to HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name example.com www.example.com;
+
+    # SSL Configuration
+    ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SSL:50m;
+    ssl_session_tickets off;
+
+    # Modern SSL configuration
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+
+    # Root directory
+    root /var/www/example.com/html;
+    index index.html;
+
+    # Logging
+    access_log /var/www/example.com/logs/access.log;
+    error_log /var/www/example.com/logs/error.log;
+}
+```
+
+2. **Performance Optimization**
+```nginx
+# Gzip Compression
+gzip on;
+gzip_vary on;
+gzip_proxied any;
+gzip_comp_level 6;
+gzip_types text/plain text/css text/xml application/json application/javascript application/rss+xml application/atom+xml image/svg+xml;
+
+# Browser Caching
+location ~* \.(jpg|jpeg|png|gif|ico|css|js)$ {
+    expires 1y;
+    add_header Cache-Control "public, no-transform";
+}
+
+# Buffer Size
+client_body_buffer_size 10K;
+client_header_buffer_size 1k;
+client_max_body_size 8m;
+large_client_header_buffers 2 1k;
+```
+
+### Security Headers
+
+```nginx
+# Security Headers
+add_header X-Frame-Options "SAMEORIGIN" always;
+add_header X-XSS-Protection "1; mode=block" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header Referrer-Policy "no-referrer-when-downgrade" always;
+add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+```
+
+## Cloudflare Integration
+
+### DNS Configuration
+
+1. **DNS Records Setup**
+```yaml
+Type  Name     Content          Proxy Status
+A     @        server_ip        Proxied
+CNAME www      example.com      Proxied
+```
+
+2. **SSL/TLS Settings**
+- Mode: Full (strict)
+- Minimum TLS Version: 1.2
+- Opportunistic Encryption: On
+- TLS 1.3: On
+- Automatic HTTPS Rewrites: On
+
+### Security Rules
+
+1. **Firewall Rules**
+```javascript
+// Block suspicious IPs
+(ip.geoip.country in {"CN" "RU"}) and (http.request.uri.path contains "/wp-admin")
+
+// Rate Limiting
+(http.request.uri.path contains "/api/") and (rate_per_second > 10)
+```
+
+2. **Page Rules**
+```yaml
+URL: example.com/*
+Settings:
+  - Cache Level: Cache Everything
+  - Edge Cache TTL: 2 hours
+  - Browser Cache TTL: 4 hours
+  - Always Use HTTPS: On
+```
+
+## Performance Optimization
+
+### Nginx Caching
+
+1. **FastCGI Cache**
+```nginx
+# Cache Configuration
+fastcgi_cache_path /tmp/nginx_cache levels=1:2 keys_zone=my_cache:10m max_size=10g inactive=60m use_temp_path=off;
+
+# Cache Settings
+location ~ \.php$ {
+    fastcgi_cache my_cache;
+    fastcgi_cache_use_stale error timeout http_500 http_503;
+    fastcgi_cache_valid 200 60m;
+    fastcgi_cache_min_uses 1;
+    fastcgi_cache_lock on;
+}
+```
+
+2. **Microcaching**
+```nginx
+# Microcaching Configuration
+fastcgi_cache_key "$scheme$request_method$host$request_uri";
+add_header X-Cache-Status $upstream_cache_status;
+
+location / {
+    proxy_cache my_cache;
+    proxy_cache_use_stale error timeout http_500 http_502 http_503 http_504;
+    proxy_cache_valid 200 1m;
+    proxy_cache_bypass $http_pragma;
+    proxy_cache_revalidate on;
+}
+```
+
+### Cloudflare Optimization
+
+1. **Auto Minify**
+```yaml
+Settings:
+  HTML: On
+  CSS: On
+  JavaScript: On
+```
+
+2. **Brotli Compression**
+```yaml
+Settings:
+  Brotli: On
+  Compression Level: Maximum
+```
+
+## Monitoring and Maintenance
+
+### Log Analysis
+
+1. **Nginx Log Format**
+```nginx
+log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                '$status $body_bytes_sent "$http_referer" '
+                '"$http_user_agent" "$http_x_forwarded_for"';
+```
+
+2. **Log Rotation**
+```nginx
+/var/www/example.com/logs/*.log {
+    daily
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    create 0640 www-data adm
+    sharedscripts
+    prerotate
+        if [ -d /etc/logrotate.d/httpd-prerotate ]; then
+            run-parts /etc/logrotate.d/httpd-prerotate
+        fi
+    endscript
+    postrotate
+        invoke-rc.d nginx rotate >/dev/null 2>&1
+    endscript
+}
+```
+
+## Backup Strategy
+
+### Configuration Backup
+
+```bash
+#!/bin/bash
+# Backup Nginx configuration
+backup_date=$(date +%Y%m%d)
+backup_dir="/backup/nginx"
+
+# Create backup directory
+mkdir -p $backup_dir
+
+# Backup Nginx configuration
+tar -czf $backup_dir/nginx_conf_$backup_date.tar.gz /etc/nginx/
+
+# Backup SSL certificates
+tar -czf $backup_dir/ssl_certs_$backup_date.tar.gz /etc/letsencrypt/
+
+# Rotate old backups
+find $backup_dir -type f -mtime +30 -delete
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **502 Bad Gateway**
+```nginx
+# Increase timeout settings
+proxy_connect_timeout 60s;
+proxy_send_timeout 60s;
+proxy_read_timeout 60s;
+fastcgi_send_timeout 60s;
+fastcgi_read_timeout 60s;
+```
+
+2. **SSL Issues**
+```bash
+# Test SSL configuration
+nginx -t
+
+# Check SSL certificate
+openssl x509 -in /etc/letsencrypt/live/example.com/fullchain.pem -text -noout
+```
+
+## Best Practices
+
+1. **Security**
+   - Regular security audits
+   - Keep software updated
+   - Use strong SSL configuration
+   - Implement rate limiting
+   - Enable WAF rules
+
+2. **Performance**
+   - Enable caching
+   - Optimize static files
+   - Use HTTP/2
+   - Monitor resource usage
+   - Regular performance testing
+
+3. **Maintenance**
+   - Regular backups
+   - Log rotation
+   - Monitoring setup
+   - Documentation
+   - Disaster recovery plan
+
+## Conclusion
+
+A well-configured Nginx and Cloudflare setup provides:
+1. Enhanced security
+2. Improved performance
+3. Better reliability
+4. Easy maintenance
+5. Scalable infrastructure
+
+By following these configurations and best practices, you can create a robust and efficient hosting environment for modern web applications.
+
+## References
+
+- [Nginx Documentation](https://nginx.org/en/docs/)
+- [Cloudflare Documentation](https://developers.cloudflare.com/)
+- [Mozilla SSL Configuration Generator](https://ssl-config.mozilla.org/)
+- [Security Headers](https://securityheaders.com/)
+- [Web.dev Performance](https://web.dev/performance-scoring/) 

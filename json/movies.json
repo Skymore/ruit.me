@@ -1,0 +1,52 @@
+[
+  {
+    "title": "The Shawshank Redemption",
+    "director": "Frank Darabont",
+    "year": "1994",
+    "genre": "Drama",
+    "description": "Two imprisoned men bond over a number of years, finding solace and eventual redemption through acts of common decency.",
+    "user_rating": "5",
+    "user_review": "A masterpiece about hope, friendship, and perseverance",
+    "imdb_rating": "9.3"
+  },
+  {
+    "title": "Inception",
+    "director": "Christopher Nolan",
+    "year": "2010",
+    "genre": "Sci-Fi",
+    "description": "A thief who steals corporate secrets through dream-sharing technology is given the inverse task of planting an idea into the mind of a C.E.O.",
+    "user_rating": "5",
+    "user_review": "Mind-bending thriller with stunning visuals",
+    "imdb_rating": "8.8"
+  },
+  {
+    "title": "The Dark Knight",
+    "director": "Christopher Nolan",
+    "year": "2008",
+    "genre": "Action",
+    "description": "When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests of his ability to fight injustice.",
+    "user_rating": "5",
+    "user_review": "Redefines the superhero genre with outstanding performances",
+    "imdb_rating": "9.0"
+  },
+  {
+    "title": "Forrest Gump",
+    "director": "Robert Zemeckis",
+    "year": "1994",
+    "genre": "Drama",
+    "description": "The presidencies of Kennedy and Johnson, the Vietnam War, the Watergate scandal and other historical events unfold from the perspective of an Alabama man with an IQ of 75.",
+    "user_rating": "5",
+    "user_review": "Heartwarming story that spans decades of American history",
+    "imdb_rating": "8.8"
+  },
+  {
+    "title": "The Matrix",
+    "director": "Lana and Lilly Wachowski",
+    "year": "1999",
+    "genre": "Sci-Fi",
+    "description": "A computer programmer discovers that reality as he knows it is a simulation created by machines, and joins a rebellion to break free.",
+    "user_rating": "5",
+    "user_review": "Revolutionary sci-fi that changed action movies forever",
+    "imdb_rating": "8.7"
+  }
+]

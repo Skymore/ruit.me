@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="120" height="120" rx="12" fill="#2D3748"/>
+  
+  <!-- GPU Grid -->
+  <rect x="30" y="30" width="60" height="60" rx="4" fill="#4A5568"/>
+  <path d="M30 45H90M30 60H90M30 75H90" stroke="#48BB78" stroke-width="1"/>
+  <path d="M45 30V90M60 30V90M75 30V90" stroke="#48BB78" stroke-width="1"/>
+  
+  <!-- Wave Pattern -->
+  <path d="M35 50C45 45 55 55 65 50C75 45 85 55 95 50" stroke="#4299E1" stroke-width="2" fill="none"/>
+  <path d="M35 65C45 60 55 70 65 65C75 60 85 70 95 65" stroke="#4299E1" stroke-width="2" fill="none"/>
+  
+  <!-- Processing Points -->
+  <circle cx="45" cy="45" r="2" fill="#ED8936"/>
+  <circle cx="60" cy="60" r="2" fill="#ED8936"/>
+  <circle cx="75" cy="75" r="2" fill="#ED8936"/>
+</svg> 

@@ -1,0 +1,383 @@
+---
+heading: 'Socket.IO Chat'
+title: 'Socket.IO Real-time Chat Implementation'
+date: '2025-01-29'
+icon: 'Node'
+tags: ['socket.io', 'typescript', 'real-time', 'chat', 'nestjs']
+draft: false
+summary: 'A complete example of implementing real-time chat using Socket.IO with TypeScript, including both server and client implementations.'
+---
+
+## Server Implementation (NestJS)
+
+```typescript
+// chat.gateway.ts
+import {
+  WebSocketGateway,
+  WebSocketServer,
+  SubscribeMessage,
+  OnGatewayConnection,
+  OnGatewayDisconnect
+} from '@nestjs/websockets';
+import { Server, Socket } from 'socket.io';
+import { JwtService } from '@nestjs/jwt';
+
+interface ChatMessage {
+  roomId: string;
+  content: string;
+  sender: string;
+  timestamp: Date;
+}
+
+@WebSocketGateway({
+  cors: {
+    origin: process.env.CLIENT_URL,
+    credentials: true
+  }
+})
+export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+  @WebSocketServer()
+  server: Server;
+
+  constructor(private jwtService: JwtService) {}
+
+  async handleConnection(client: Socket) {
+    try {
+      // Verify JWT token
+      const token = client.handshake.auth.token;
+      const payload = this.jwtService.verify(token);
+      
+      // Store user info in socket
+      client.data.user = payload;
+      
+      console.log(`Client connected: ${client.id}`);
+    } catch (error) {
+      // Invalid token
+      client.disconnect();
+    }
+  }
+
+  handleDisconnect(client: Socket) {
+    console.log(`Client disconnected: ${client.id}`);
+  }
+
+  @SubscribeMessage('joinRoom')
+  handleJoinRoom(client: Socket, roomId: string) {
+    client.join(roomId);
+    
+    // Notify others in the room
+    client.to(roomId).emit('userJoined', {
+      userId: client.data.user.id,
+      username: client.data.user.username
+    });
+  }
+
+  @SubscribeMessage('leaveRoom')
+  handleLeaveRoom(client: Socket, roomId: string) {
+    client.leave(roomId);
+    
+    // Notify others in the room
+    client.to(roomId).emit('userLeft', {
+      userId: client.data.user.id,
+      username: client.data.user.username
+    });
+  }
+
+  @SubscribeMessage('message')
+  async handleMessage(client: Socket, message: ChatMessage) {
+    // Save message to database
+    await this.chatService.saveMessage({
+      ...message,
+      sender: client.data.user.id
+    });
+    
+    // Broadcast to room
+    this.server.to(message.roomId).emit('message', {
+      ...message,
+      sender: {
+        id: client.data.user.id,
+        username: client.data.user.username
+      }
+    });
+  }
+
+  @SubscribeMessage('typing')
+  handleTyping(client: Socket, roomId: string) {
+    client.to(roomId).emit('typing', {
+      userId: client.data.user.id,
+      username: client.data.user.username
+    });
+  }
+}
+```
+
+## Client Implementation (React)
+
+```typescript
+// socket.service.ts
+import { io, Socket } from 'socket.io-client';
+
+export class SocketService {
+  private socket: Socket;
+  private messageHandlers: Map<string, (data: any) => void> = new Map();
+
+  constructor() {
+    this.socket = io(process.env.SOCKET_SERVER_URL!, {
+      auth: {
+        token: localStorage.getItem('token')
+      },
+      transports: ['websocket']
+    });
+
+    this.setupListeners();
+  }
+
+  private setupListeners() {
+    this.socket.on('connect', () => {
+      console.log('Connected to chat server');
+    });
+
+    this.socket.on('disconnect', () => {
+      console.log('Disconnected from chat server');
+    });
+
+    this.socket.on('message', (data) => {
+      this.messageHandlers.get('message')?.(data);
+    });
+
+    this.socket.on('typing', (data) => {
+      this.messageHandlers.get('typing')?.(data);
+    });
+
+    this.socket.on('userJoined', (data) => {
+      this.messageHandlers.get('userJoined')?.(data);
+    });
+
+    this.socket.on('userLeft', (data) => {
+      this.messageHandlers.get('userLeft')?.(data);
+    });
+  }
+
+  joinRoom(roomId: string) {
+    this.socket.emit('joinRoom', roomId);
+  }
+
+  leaveRoom(roomId: string) {
+    this.socket.emit('leaveRoom', roomId);
+  }
+
+  sendMessage(message: ChatMessage) {
+    this.socket.emit('message', message);
+  }
+
+  sendTyping(roomId: string) {
+    this.socket.emit('typing', roomId);
+  }
+
+  onMessage(handler: (data: any) => void) {
+    this.messageHandlers.set('message', handler);
+  }
+
+  onTyping(handler: (data: any) => void) {
+    this.messageHandlers.set('typing', handler);
+  }
+
+  onUserJoined(handler: (data: any) => void) {
+    this.messageHandlers.set('userJoined', handler);
+  }
+
+  onUserLeft(handler: (data: any) => void) {
+    this.messageHandlers.set('userLeft', handler);
+  }
+
+  disconnect() {
+    this.socket.disconnect();
+  }
+}
+
+// ChatRoom.tsx
+import { useEffect, useRef, useState } from 'react';
+import { SocketService } from './socket.service';
+
+interface Message {
+  id: string;
+  content: string;
+  sender: {
+    id: string;
+    username: string;
+  };
+  timestamp: Date;
+}
+
+export function ChatRoom({ roomId }: { roomId: string }) {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
+  const socketService = useRef<SocketService>();
+  const typingTimeout = useRef<NodeJS.Timeout>();
+
+  useEffect(() => {
+    // Initialize socket service
+    socketService.current = new SocketService();
+    
+    // Join room
+    socketService.current.joinRoom(roomId);
+    
+    // Set up message handlers
+    socketService.current.onMessage((message) => {
+      setMessages(prev => [...prev, message]);
+    });
+    
+    socketService.current.onTyping(({ username }) => {
+      setTypingUsers(prev => new Set(prev).add(username));
+      
+      // Clear typing indicator after 3 seconds
+      if (typingTimeout.current) {
+        clearTimeout(typingTimeout.current);
+      }
+      
+      typingTimeout.current = setTimeout(() => {
+        setTypingUsers(prev => {
+          const next = new Set(prev);
+          next.delete(username);
+          return next;
+        });
+      }, 3000);
+    });
+    
+    return () => {
+      // Cleanup
+      if (socketService.current) {
+        socketService.current.leaveRoom(roomId);
+        socketService.current.disconnect();
+      }
+    };
+  }, [roomId]);
+
+  const handleSendMessage = (content: string) => {
+    if (socketService.current) {
+      socketService.current.sendMessage({
+        roomId,
+        content,
+        timestamp: new Date()
+      });
+    }
+  };
+
+  const handleTyping = () => {
+    if (socketService.current) {
+      socketService.current.sendTyping(roomId);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={`flex ${
+              message.sender.id === 'currentUserId'
+                ? 'justify-end'
+                : 'justify-start'
+            }`}
+          >
+            <div
+              className={`max-w-[70%] rounded-lg px-4 py-2 ${
+                message.sender.id === 'currentUserId'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-200'
+              }`}
+            >
+              <div className="font-semibold text-sm">
+                {message.sender.username}
+              </div>
+              <div>{message.content}</div>
+              <div className="text-xs opacity-75">
+                {new Date(message.timestamp).toLocaleTimeString()}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      
+      {typingUsers.size > 0 && (
+        <div className="px-4 py-2 text-sm text-gray-500">
+          {Array.from(typingUsers).join(', ')} typing...
+        </div>
+      )}
+      
+      <div className="border-t p-4">
+        <input
+          type="text"
+          placeholder="Type a message..."
+          className="w-full rounded-lg border px-4 py-2"
+          onChange={() => handleTyping()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              const content = e.currentTarget.value.trim();
+              if (content) {
+                handleSendMessage(content);
+                e.currentTarget.value = '';
+              }
+            }
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+```
+
+## Usage
+
+1. Start the NestJS server with the WebSocket gateway:
+```typescript
+// main.ts
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  
+  // Enable CORS
+  app.enableCors({
+    origin: process.env.CLIENT_URL,
+    credentials: true
+  });
+  
+  await app.listen(3000);
+}
+bootstrap();
+```
+
+2. Use the chat room component in your React app:
+```tsx
+function App() {
+  return (
+    <div className="h-screen">
+      <ChatRoom roomId="room-1" />
+    </div>
+  );
+}
+```
+
+## Features
+
+- Real-time messaging
+- Typing indicators
+- Room-based chat
+- JWT authentication
+- User join/leave notifications
+- Message persistence
+- Error handling
+- Automatic reconnection
+
+## Notes
+
+- Implement proper error handling
+- Add message delivery confirmation
+- Consider implementing message queuing
+- Add offline message support
+- Implement proper cleanup
+- Add rate limiting
+- Consider implementing message encryption 

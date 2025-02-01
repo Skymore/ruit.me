@@ -1,0 +1,281 @@
+---
+title: 'Building AI Service API with WebSocket'
+date: '2025-01-17'
+tags: ['websocket', 'api', 'ai', 'typescript', 'system-design']
+draft: false
+summary: 'A comprehensive guide to building an AI service API using WebSocket, focusing on real-time communication, performance, and scalability.'
+images: ['/static/images/banners/a-close-up-of-a-network-with-wires-connected-to-it__albertstoynov__dyUp7WPu5q4.jpeg']
+authors: ['default']
+---
+
+Building a real-time AI service requires careful consideration of API design, data structures, and communication patterns. In this article, we'll explore how to create a WebSocket-based AI Service API for conducting mock interviews with AI, supporting multiple roles and interview types.
+
+## System Design Overview
+
+The AI Service API is designed around these key components:
+
+1. **WebSocket Interface**: Real-time bidirectional communication
+2. **Role-based Access**: Support for interviewer and candidate roles
+3. **Multiple Interview Types**: Behavioral, coding, and HR interviews
+4. **Language Support**: Multi-language responses
+5. **Customizable Prompts**: Flexible interview scenarios
+
+## Core Data Structures
+
+### Request Interface
+
+The API uses a well-defined request structure:
+
+```typescript
+interface AIRequest {
+  // Required fields
+  transcripts: TranscriptType[];      // Conversation history
+  model: ModelType;                   // AI model selection
+  promptType: PromptType;             // Interview type
+  role: Role;                         // User role
+  company: string;                    // Target company
+  position: string;                   // Job position
+  sessionId: string;                  // Session identifier
+
+  // Optional fields
+  language?: string;                  // Response language
+  userEmail?: string;                 // User identification
+  stories?: Story[];                  // Behavioral examples
+  personalInfo?: PersonalInfo;        // User background
+}
+```
+
+### Response Structure
+
+Responses are streamed in chunks for real-time interaction:
+
+```typescript
+interface AIResponse {
+  type: 'chunk' | 'error' | 'done';  // Response type
+  responseType: 'mock' | 'assistant'; // AI role
+  content?: string;                  // Response content
+  error?: string;                    // Error details
+  originalTranscriptId: string;      // Reference ID
+  sessionId: string;                 // Session tracking
+}
+```
+
+## Feature Implementation
+
+### 1. Language Support
+
+The service supports multiple languages with easy extensibility:
+
+```typescript
+type SupportedLanguage = 'en' | 'zh' | string;
+
+const languageHandler = {
+  en: () => ({ locale: 'en-US', format: 'MM/DD/YYYY' }),
+  zh: () => ({ locale: 'zh-CN', format: 'YYYY年MM月DD日' }),
+  // Add more languages as needed
+};
+```
+
+### 2. Role-based Access
+
+Implement role-based features and permissions:
+
+```typescript
+enum UserRole {
+  INTERVIEWER = 'interviewer',
+  CANDIDATE = 'candidate',
+  ADMIN = 'admin'
+}
+
+interface AccessControl {
+  role: UserRole;
+  permissions: string[];
+  features: Set<string>;
+}
+```
+
+### 3. Interview Types
+
+Support different interview scenarios:
+
+```typescript
+enum InterviewType {
+  BEHAVIORAL = 'BQ',
+  CODING = 'CODE',
+  HR = 'HR'
+}
+
+interface InterviewConfig {
+  type: InterviewType;
+  prompts: string[];
+  evaluation: EvaluationCriteria;
+  timeLimit?: number;
+}
+```
+
+## Implementation Best Practices
+
+### 1. Error Handling
+
+Implement comprehensive error handling:
+
+```typescript
+class AIServiceError extends Error {
+  constructor(
+    public code: string,
+    public message: string,
+    public details?: any
+  ) {
+    super(message);
+    this.name = 'AIServiceError';
+  }
+}
+
+const errorHandler = {
+  handleConnectionError: (error: Error) => {
+    // Handle connection issues
+  },
+  handleModelError: (error: Error) => {
+    // Handle AI model errors
+  },
+  handleValidationError: (error: Error) => {
+    // Handle request validation errors
+  }
+};
+```
+
+### 2. Request Validation
+
+Validate incoming requests:
+
+```typescript
+const validateRequest = (request: AIRequest): boolean => {
+  const requiredFields = [
+    'transcripts',
+    'model',
+    'promptType',
+    'role',
+    'company',
+    'position',
+    'sessionId'
+  ];
+
+  return requiredFields.every(field => 
+    request[field] !== undefined && request[field] !== null
+  );
+};
+```
+
+### 3. Response Streaming
+
+Handle streaming responses efficiently:
+
+```typescript
+const handleStreamResponse = (
+  response: AIResponse,
+  onChunk: (chunk: string) => void,
+  onComplete: () => void
+) => {
+  if (response.type === 'chunk') {
+    onChunk(response.content);
+  } else if (response.type === 'done') {
+    onComplete();
+  } else {
+    throw new AIServiceError(
+      'STREAM_ERROR',
+      'Error in response stream'
+    );
+  }
+};
+```
+
+## Security Considerations
+
+1. **Authentication**
+   - Implement JWT validation
+   - Session management
+   - Rate limiting
+
+2. **Data Protection**
+   - Encrypt sensitive information
+   - Validate input data
+   - Sanitize responses
+
+3. **Access Control**
+   - Role-based permissions
+   - Feature flags
+   - Usage quotas
+
+## Performance Optimization
+
+1. **Connection Management**
+   - Keep-alive mechanisms
+   - Automatic reconnection
+   - Connection pooling
+
+2. **Data Efficiency**
+   - Message compression
+   - Batch processing
+   - Caching strategies
+
+## Monitoring and Logging
+
+Implement comprehensive monitoring:
+
+```typescript
+interface AIServiceMetrics {
+  requestCount: number;
+  responseTime: number;
+  errorRate: number;
+  activeConnections: number;
+}
+
+const monitoringService = {
+  logRequest: (request: AIRequest) => {
+    // Log request details
+  },
+  trackMetrics: (metrics: AIServiceMetrics) => {
+    // Update monitoring dashboards
+  },
+  alertOnError: (error: AIServiceError) => {
+    // Send alerts for critical issues
+  }
+};
+```
+
+## Testing Strategy
+
+1. **Unit Tests**
+   - Request validation
+   - Error handling
+   - Data transformations
+
+2. **Integration Tests**
+   - WebSocket connections
+   - Response streaming
+   - Error scenarios
+
+3. **Load Tests**
+   - Connection limits
+   - Response times
+   - Error rates
+
+## Conclusion
+
+Building a real-time AI Service API requires careful attention to:
+
+1. Clear interface definitions
+2. Robust error handling
+3. Efficient data streaming
+4. Security measures
+5. Performance optimization
+6. Comprehensive monitoring
+
+By following these patterns and best practices, you can create a reliable and scalable AI service that provides real-time interview simulations with different roles and types.
+
+## References
+
+- [WebSocket API Documentation](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket)
+- [TypeScript Documentation](https://www.typescriptlang.org/docs/)
+- [Socket.IO Documentation](https://socket.io/docs/v4/)
+- [NestJS WebSocket Documentation](https://docs.nestjs.com/websockets/gateways) 

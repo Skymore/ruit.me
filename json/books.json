@@ -1,0 +1,29 @@
+[
+  {
+    "title": "Atomic Habits",
+    "author_name": "James Clear",
+    "book_description": "A proven framework for improving habits",
+    "book_published": "2018",
+    "user_rating": "5",
+    "user_review": "Excellent book on habit formation",
+    "average_rating": "4.34"
+  },
+  {
+    "title": "Think and Grow Rich",
+    "author_name": "Napoleon Hill",
+    "book_description": "Classic guide to personal success and wealth creation",
+    "book_published": "1937",
+    "user_rating": "5",
+    "user_review": "Timeless principles for achieving success",
+    "average_rating": "4.08"
+  },
+  {
+    "title": "Eloquent JavaScript",
+    "author_name": "Marijn Haverbeke",
+    "book_description": "Modern introduction to JavaScript programming",
+    "book_published": "2010",
+    "user_rating": "4",
+    "user_review": "Excellent guide for learning JavaScript",
+    "average_rating": "4.16"
+  }
+]

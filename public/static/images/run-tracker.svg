@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="120" height="120" rx="12" fill="#2D3748"/>
+  
+  <!-- Map Background -->
+  <rect x="30" y="30" width="60" height="60" rx="4" fill="#4A5568"/>
+  
+  <!-- Running Track -->
+  <path d="M40 40C50 50 70 50 80 40M40 60C50 70 70 70 80 60M40 80C50 90 70 90 80 80" 
+        stroke="#48BB78" stroke-width="2" fill="none"/>
+  
+  <!-- Location Markers -->
+  <circle cx="40" cy="40" r="3" fill="#4299E1"/>
+  <circle cx="60" cy="60" r="3" fill="#4299E1"/>
+  <circle cx="80" cy="80" r="3" fill="#4299E1"/>
+  
+  <!-- Connection Lines -->
+  <line x1="42" y1="42" x2="58" y2="58" stroke="#ED8936" stroke-width="1"/>
+  <line x1="62" y1="62" x2="78" y2="78" stroke="#ED8936" stroke-width="1"/>
+</svg> 

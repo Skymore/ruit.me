@@ -1,0 +1,403 @@
+---
+title: 'Refactoring State Management for Modern Web Applications'
+date: '2025-01-20'
+tags: ['architecture', 'state-management', 'typescript', 'react', 'refactoring']
+draft: false
+summary: 'A comprehensive guide to refactoring state management in modern web applications, focusing on implementing a stateless service layer and store-driven architecture.'
+images: ['/static/images/banners/graphs-of-performance-analytics-on-a-laptop-screen__lukechesser__JKUTrJ4vK00.jpeg']
+authors: ['default']
+---
+
+## Introduction
+
+State management is a critical aspect of modern web applications, especially in real-time, interactive systems. In this article, we'll explore how to refactor state management to achieve better maintainability, testability, and scalability through a stateless service layer design.
+
+## The Challenge
+
+### Current Issues
+
+Many web applications face common state management challenges:
+
+1. **Inconsistent State Management**
+   - Different components handle state differently
+   - Mixed responsibilities between layers
+   - Duplicate state storage
+   - Unclear state ownership
+
+2. **Service Layer Problems**
+   ```typescript
+   // Before: Service with mixed responsibilities
+   class TranscriptService {
+       private config: ServiceConfig;
+       private state: ServiceState;
+       
+       constructor() {
+           this.config = defaultConfig;
+           this.state = initialState;
+       }
+       
+       // Method mixing state management and business logic
+       async processTranscript(text: string) {
+           this.state.lastProcessed = text;
+           // Process using internal state
+           const result = await this.processWithConfig(
+               text, 
+               this.config
+           );
+           this.state.results.push(result);
+           return result;
+       }
+   }
+   ```
+
+## The Solution
+
+### 1. Stateless Service Layer
+
+The core of our refactoring is moving to a stateless service layer:
+
+```typescript
+// After: Stateless service implementation
+export class TranscriptsService extends BaseService {
+    // Only infrastructure state
+    private static instances: Map<string, TranscriptsService> = new Map();
+
+    public async sendTranscript(
+        transcript: TranscriptType, 
+        suggestionConfig: ModelConfig,
+        aiMockConfig: ModelConfig | null,
+        company: string,
+        position: string,
+        targetLanguage: 'en' | 'zh',
+        isTranslateEnabled: boolean
+    ) {
+        // All configurations passed as parameters
+        // No internal state storage
+        const processedTranscript = await this.processTranscript(
+            transcript,
+            suggestionConfig,
+            targetLanguage,
+            isTranslateEnabled
+        );
+
+        this.emitWithCheck('transcript', {
+            transcript: processedTranscript,
+            aiEnabled: suggestionConfig.isEnabled,
+            aiMockEnabled: aiMockConfig?.isEnabled ?? false,
+            company,
+            position
+        });
+    }
+}
+```
+
+### 2. Store-Driven Architecture
+
+Implement a store-centric approach for state management:
+
+```typescript
+// Types for configuration
+interface ModelConfig {
+    promptType: PromptType;
+    model: ModelType;
+    isEnabled: boolean;
+}
+
+// React component using store
+const TranscriptPanel: React.FC = () => {
+    const store = useTranscriptStore();
+    const { transcriptsService } = useTranscriptHandler({
+        store,
+        componentKey: 'main',
+        enableTTS: false
+    });
+
+    const handleTranscript = async (text: string) => {
+        await transcriptsService.sendTranscript(
+            text,
+            store.suggestionConfig,
+            store.aiMockConfig,
+            store.company,
+            store.position,
+            store.targetLanguage,
+            store.isTranslateEnabled
+        );
+    };
+
+    return (
+        <div>
+            <TranscriptInput onSubmit={handleTranscript} />
+            <TranscriptList transcripts={store.transcripts} />
+        </div>
+    );
+};
+```
+
+### 3. Event-Driven Communication
+
+Implement clean event-driven communication:
+
+```typescript
+class BaseService {
+    protected socket: WebSocket | null = null;
+    protected isConnected: boolean = false;
+    protected messageHandlers: MessageHandler[] = [];
+
+    protected setupSocketListeners() {
+        if (!this.socket) return;
+
+        this.socket.on('transcript_update', (data: TranscriptType) => {
+            // Direct event forwarding without state storage
+            this.notifyHandlers({
+                type: 'transcript_update',
+                transcript: data
+            });
+        });
+
+        this.socket.on('error', (error: Error) => {
+            this.notifyHandlers({
+                type: 'error',
+                error
+            });
+        });
+    }
+
+    protected notifyHandlers(message: WebSocketMessage) {
+        this.messageHandlers.forEach(handler => handler(message));
+    }
+}
+```
+
+## Data Flow Patterns
+
+### 1. User Interaction Flow
+
+```typescript
+// Component handling user interaction
+const AIAssistantPanel: React.FC = () => {
+    const store = useAIStore();
+    
+    const handleUserInput = async (input: string) => {
+        // Configuration from store
+        const config = {
+            model: store.selectedModel,
+            promptType: store.promptType,
+            isEnabled: store.isEnabled
+        };
+
+        // Pass to service with all required data
+        await aiService.processInput(
+            input,
+            config,
+            store.context,
+            store.preferences
+        );
+    };
+
+    return (
+        <div>
+            <UserInput onSubmit={handleUserInput} />
+            <ResponseDisplay responses={store.responses} />
+        </div>
+    );
+};
+```
+
+### 2. Backend Event Flow
+
+```typescript
+// Service event handling
+class AIService extends BaseService {
+    protected setupEventHandlers() {
+        this.socket?.on('ai_response', (data) => {
+            // Forward event without storing state
+            this.notifyHandlers({
+                type: 'ai_response',
+                data
+            });
+        });
+    }
+}
+
+// Store update handling
+const useAIStore = create<AIStore>((set) => ({
+    responses: [],
+    addResponse: (response) => set(state => ({
+        responses: [...state.responses, response]
+    })),
+    // Other state management
+}));
+
+// Component connection
+const useAIHandler = (store: AIStore) => {
+    useEffect(() => {
+        const handler = (message: WebSocketMessage) => {
+            if (message.type === 'ai_response') {
+                store.addResponse(message.data);
+            }
+        };
+
+        aiService.addMessageHandler(handler);
+        return () => aiService.removeMessageHandler(handler);
+    }, [store]);
+};
+```
+
+## Best Practices
+
+### 1. Service Implementation
+
+```typescript
+// Base service template
+abstract class BaseService {
+    // Only infrastructure state
+    protected abstract setupInfrastructure(): void;
+    
+    // Business methods must be stateless
+    protected abstract processMessage(
+        message: Message,
+        config: Config
+    ): Promise<Result>;
+}
+
+// Concrete service implementation
+class ConcreteService extends BaseService {
+    public async processRequest(
+        data: RequestData,
+        config: RequestConfig,
+        context: RequestContext
+    ) {
+        // Validate inputs
+        this.validateRequest(data, config);
+
+        // Process with provided configuration
+        const result = await this.processMessage(
+            this.createMessage(data),
+            config
+        );
+
+        // Emit result without storing
+        this.emitResult(result, context);
+    }
+}
+```
+
+### 2. Store Integration
+
+```typescript
+// Store definition with clean interfaces
+interface StoreState {
+    data: DataType[];
+    config: ConfigType;
+    status: StatusType;
+}
+
+interface StoreActions {
+    addData: (data: DataType) => void;
+    updateConfig: (config: Partial<ConfigType>) => void;
+    setStatus: (status: StatusType) => void;
+}
+
+// Store implementation
+const useStore = create<StoreState & StoreActions>((set) => ({
+    data: [],
+    config: defaultConfig,
+    status: 'idle',
+
+    addData: (data) => set(state => ({
+        data: [...state.data, data]
+    })),
+
+    updateConfig: (config) => set(state => ({
+        config: { ...state.config, ...config }
+    })),
+
+    setStatus: (status) => set({ status })
+}));
+```
+
+### 3. Component Design
+
+```typescript
+// Clean component with store integration
+const DataComponent: React.FC = () => {
+    const store = useStore();
+    const service = useService();
+
+    // Handler with store integration
+    const handleAction = async (input: InputType) => {
+        store.setStatus('loading');
+        
+        try {
+            await service.processData(
+                input,
+                store.config,
+                {
+                    context: store.context,
+                    metadata: store.metadata
+                }
+            );
+            store.setStatus('success');
+        } catch (error) {
+            store.setStatus('error');
+            handleError(error);
+        }
+    };
+
+    return (
+        <div>
+            <InputHandler onAction={handleAction} />
+            <StatusDisplay status={store.status} />
+            <DataDisplay data={store.data} />
+        </div>
+    );
+};
+```
+
+## Benefits
+
+1. **Improved Maintainability**
+   - Clear separation of concerns
+   - Predictable state management
+   - Easier debugging and testing
+   - Reduced state synchronization issues
+
+2. **Enhanced Testability**
+   ```typescript
+   // Easy to test service methods
+   describe('TranscriptService', () => {
+       it('processes transcript correctly', async () => {
+           const service = new TranscriptService();
+           const result = await service.processTranscript(
+               sampleTranscript,
+               testConfig,
+               testContext
+           );
+           expect(result).toMatchSnapshot();
+       });
+   });
+   ```
+
+3. **Better Scalability**
+   - Clear patterns for new features
+   - Consistent state management
+   - Reduced coupling
+   - Easier extensions
+
+## Conclusion
+
+Refactoring state management with a stateless service layer and store-driven architecture brings numerous benefits to modern web applications. The key principles are:
+
+1. Keep services stateless
+2. Use stores as single source of truth
+3. Implement event-driven communication
+4. Maintain clean separation of concerns
+
+By following these patterns, you can create more maintainable, testable, and scalable applications.
+
+## References
+
+- [React Documentation](https://reactjs.org/docs/hooks-state.html)
+- [TypeScript Handbook](https://www.typescriptlang.org/docs/handbook/intro.html)
+- [WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket)
+- [Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html) 
