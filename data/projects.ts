@@ -8,23 +8,23 @@ const PROJECT_TYPE = {
 export const PROJECTS: Project[] = [
   {
     type: PROJECT_TYPE.WORK,
-    title: 'Parkalytics',
+    title: 'Traffic Analysis System at Parkalytics',
     date: '2024-01',
     description:
-      'UW ECE Capstone Project focused on traffic analysis and vehicle tracking.\n' +
-      'Processed video frames and converted tracking datasets to object detection datasets with corrected annotations.\n' +
-      'Merged VisDrone and custom datasets into a comprehensive traffic dataset with data augmentation.\n' +
-      'Trained and evaluated models using YOLOv8x and GELAN-C, achieving mAP@0.50 of 0.545 and 0.52.\n' +
-      'Integrated YOLOv8/9 with ByteTrack for vehicle tracking and counting in video footage.',
+      'Led UW ECE Capstone Project focused on traffic analysis and vehicle tracking using computer vision and deep learning.\n' +
+      'Processed and enhanced video frames with advanced preprocessing techniques, converting tracking datasets to object detection format with corrected annotations.\n' +
+      'Engineered comprehensive traffic dataset by merging VisDrone and custom datasets with data augmentation strategies.\n' +
+      'Trained and evaluated models using YOLOv8x and GELAN-C architectures, achieving mAP@0.50 of 0.545 and 0.52.\n' +
+      'Integrated YOLOv8/9 with ByteTrack for real-time vehicle tracking and counting in video footage.',
     imgSrc: '/static/images/parkalytics.svg',
-    builtWith: ['Python', 'YOLOv8', 'ByteTrack', 'Computer Vision', 'Deep Learning'],
+    builtWith: ['Python', 'TensorFlow', 'YOLOv8', 'ByteTrack', 'Computer Vision', 'Deep Learning'],
     links: [
       { title: 'Internal Project', url: '#' }
     ]
   },
   {
     type: PROJECT_TYPE.WORK,
-    title: 'Well Log Analysis Platform',
+    title: 'Well Log Analysis Platform at SLB',
     date: '2024-09',
     description:
       'High-performance platform with React/Flask/MongoDB stack on Azure, featuring well log generation, model lifecycle management, and real-time task monitoring.\n' +
@@ -38,19 +38,18 @@ export const PROJECTS: Project[] = [
   },
   {
     type: PROJECT_TYPE.WORK,
-    title: 'Game Development Projects',
+    title: 'Game Development at Alibaba',
     date: '2024-06',
     description:
-      'Implemented pathfinding system for SLG game using optimized A* algorithm on Lua and C++ hybrid model, capable of handling 1500×1500 hex grid within 200ms.\n' +
-      'Created Roguelike Shooter demo with custom timer and adjustable timescale.\n' +
-      'Developed game replay system for online card game Morimens, with server storing game frame instructions on OSS service and client replaying.\n' +
-      'Optimized social system with segmented caching and asynchronous preloading.',
+      'Implemented pathfinding system for SLG game using optimized A* algorithm on Lua and C++ hybrid model, capable of handling 1500×1500 hex grid within 200ms, with path smoothing optimization.\n' +
+      'Developed a Roguelike Shooter demo using Lua and a custom timer with adjustable timescale, pause, and resume.\n' +
+      'Created the game replay system for online card game Morimens, with the server storing game frame instructions and states on an OSS service, and the client retrieving data directly from OSS and replaying.\n' +
+      'Optimized the social system for Morimens with segmented caching, asynchronous preloading, and selective retrieval, reducing avg and max RPC times by 83.2% and 99.1%, earning positive feedback.',
     imgSrc: '/static/images/game-development.svg',
     builtWith: ['C++', 'Lua', 'Unity', 'Game Development', 'OSS'],
-    url: 'https://store.steampowered.com/app/3052450/Morimens/',
     links: [
-      { title: 'Steam', url: 'https://store.steampowered.com/app/3052450/Morimens/' },
-      { title: 'Website', url: 'https://morimens.qookkagames.com/' }
+      { title: 'Roguelike Demo', url: 'https://youtu.be/CFG76TDBImw' },
+      { title: 'Morimens', url: 'https://store.steampowered.com/app/3052450/Morimens/' }
     ]
   },
   {
