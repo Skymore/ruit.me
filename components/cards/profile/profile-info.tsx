@@ -2,7 +2,6 @@ import { SITE_METADATA } from '~/data/site-metadata'
 import { BriefcaseBusiness, Github, Linkedin, Mail, MapPin, Youtube, FileText } from 'lucide-react'
 import { Fragment } from 'react'
 import { Twemoji } from '~/components/ui/twemoji'
-import { SOCIALS } from '~/data/socials'
 
 function getAccountHandle(url = '') {
   let lastPart = url.split('/').pop()
