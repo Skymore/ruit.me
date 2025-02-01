@@ -63,11 +63,10 @@ export const PROJECTS: Project[] = [
       'Designed RESTful APIs with Firebase Auth and MongoDB for data persistence.',
     imgSrc: '/static/images/mock-interview.svg',
     builtWith: ['TypeScript', 'Python', 'React', 'NestJS', 'FastAPI',  'MongoDB', 'OpenAI', 'WebRTC'],
-    url: 'https://ruit.me',
-    repo: 'Skymore/ruit.me',
+    url: 'https://mocki.ruit.me',
     links: [
-      { title: 'Demo', url: 'https://ruit.me' },
-      { title: 'GitHub', url: 'https://github.com/Skymore/ruit.me' }
+      { title: 'Website', url: 'https://mocki.ruit.me' },
+      { title: 'Private Project', url: '#' }
     ]
   },
   {
