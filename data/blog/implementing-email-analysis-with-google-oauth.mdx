@@ -1,17 +1,450 @@
 ---
 title: 'Implementing Email Analysis with Google OAuth Integration'
-date: '2025-01-17'
+date: '2025-02-04'
 tags: ['oauth', 'gmail-api', 'system-design', 'typescript', 'python', 'architecture']
 draft: false
 summary: 'A comprehensive guide to implementing email analysis features using Google OAuth for authentication and GPT4O MINI for content analysis, focusing on architecture, security, and performance optimization.'
-images: ['/static/images/banners/a-close-up-of-a-network-with-wires-connected-to-it__albertstoynov__dyUp7WPu5q4.jpeg']
+images: ['/static/images/banners/email-analysis.png']
 authors: ['default']
 ---
 
 Building a secure and efficient email analysis system requires careful consideration of authentication, data processing, and performance optimization. This article explores the implementation of an email analysis feature using Google OAuth for authentication and GPT4O MINI for content analysis, with a focus on system architecture and best practices.
 
-## System Architecture Overview
+# Email Analysis with Google OAuth Integration
 
-The email analysis system is built with a clear separation of concerns and robust security measures. Here's a detailed look at the system components and their interactions:
+## Overview
+This document outlines the implementation of the email analysis feature using Google OAuth for authentication and GPT4O MINI for email content analysis. The system allows users to analyze their job-related emails by connecting their Gmail account, processing the emails, and presenting the results in a structured format.
 
-[Content of the original document follows, starting from the Architecture section...] 
+
+## Architecture
+
+```mermaid
+graph TD
+    subgraph Frontend
+        A[EmailAnalysis Page] -->|1 Request Auth| B[Google OAuth]
+        B -->|2 Return Auth Code| A
+        A -->|3 Send Auth Code| C[Backend API]
+        A -->|7 Store ID Token| L[LocalStorage]
+    end
+
+    subgraph Backend
+        C -->|4 Exchange Code| B
+        B -->|5 Return Tokens| C
+        C -->|6 Return ID Token & User Info| A
+        
+        subgraph Token Storage
+            D[TTLCache] -->|Store Access Token<br/>1 hour TTL| E[Access Token]
+            F[MongoDB] -->|Store Refresh Token<br/>Long-lived| G[Refresh Token]
+        end
+        
+        C -->|6a Store Access Token| D
+        C -->|6b Store Refresh Token| F
+        
+        H[Email Service] -->|8 Get Access Token| D
+        H -->|9 If Expired| I[Token Service]
+        I -->|10 Get Refresh Token| F
+        I -->|11 Refresh Access Token| B
+        I -->|12 Update| D
+        
+        subgraph Email Fetching
+            H -->|13a Get Message IDs| J[Gmail API]
+            J -->|13b Return IDs| H
+            H -->|14a Check Cache| K[Email Processing Service]
+            K -->|14b Cache Hit| H
+            H -->|15a If Cached| J
+            J -->|15b Return Metadata| H
+            H -->|16a If Not Cached| J
+            J -->|16b Return Full Content| H
+        end
+
+        subgraph Email Analysis Cache
+            K -->|17a Check Memory Cache| M[TTLCache]
+            M -->|17b If Not Found| N[MongoDB Cache]
+            N -->|17c If Not Found| O[GPT4O MINI]
+            O -->|18a Cache Result| M
+            O -->|18b Cache Result| N
+        end
+    end
+
+    classDef cacheNode fill:#f9f,stroke:#333,stroke-width:2px;
+    class M,N cacheNode;
+```
+
+## Components
+
+### Frontend Components
+1. **EmailAnalysis Page**
+   - Path: `src/pages/EmailAnalysis/`
+   - Handles user interaction and displays email analysis results
+   - Manages Google OAuth flow initiation
+
+2. **Header Integration**
+   - Path: `src/components/Layout/Header.tsx`
+   - Provides navigation access to email analysis feature
+   - Uses `MailOutlined` icon for visual representation
+
+### Backend Services
+
+1. **Token Service** (`server-python/src/services/token_service.py`)
+   - Manages OAuth token lifecycle
+   - Handles token exchange and validation
+   - Implements token caching for performance
+
+2. **Email Service** (`server-python/src/services/email_service.py`)
+   ```mermaid
+   sequenceDiagram
+       participant Client
+       participant EmailService
+       participant GmailAPI
+       participant ProcessingService
+       
+       Client->>EmailService: fetch_job_related_emails()
+       EmailService->>GmailAPI: authenticate & fetch
+       GmailAPI-->>EmailService: raw emails
+       EmailService->>ProcessingService: process emails
+       ProcessingService-->>EmailService: analysis results
+       EmailService-->>Client: structured results
+   ```
+
+3. **Email Processing Service** (`server-python/src/services/email_processing_service.py`)
+   - Analyzes email content using AI models
+   - Classifies job application status
+   - Extracts relevant information (company, position, dates)
+   - Implements caching for processed results
+
+### API Routes
+
+1. **OAuth Routes** (`server-python/src/routes/email_routes.py`)
+   - POST `/auth/google`: Handle OAuth callback
+   - GET `/auth/validate`: Validate tokens
+   - GET `/emails/fetch`: Fetch and analyze emails
+
+## Data Models
+
+### Token Model
+```mermaid
+classDiagram
+    class TokenInfo {
+        +String access_token
+        +String refresh_token
+        +DateTime expires_at
+        +String token_type
+    }
+```
+
+### Email Analysis Models
+```mermaid
+classDiagram
+    class EmailAnalysisResult {
+        +EmailStatus status
+        +String company
+        +String position
+        +DateTime date
+        +String details
+        +Float confidence
+        +String message_id
+    }
+    
+    class EmailMessage {
+        +String subject
+        +String sender
+        +DateTime date
+        +String body
+        +String message_id
+    }
+```
+
+## OAuth Authentication and Token Management
+
+### OAuth Flow and Token Relationships
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant Backend
+    participant Google
+    participant Cache
+    participant MongoDB
+
+    User->>Frontend: Click Login
+    Frontend->>Google: Request Authorization
+    Google->>User: Show Consent Screen
+    User->>Google: Grant Permission
+    Google->>Frontend: Return Authorization Code
+    Frontend->>Backend: Send Authorization Code
+    Backend->>Google: Exchange Code for Tokens
+    Google->>Backend: Return ID, Access & Refresh Tokens
+    Backend->>MongoDB: Store Refresh Token
+    Backend->>Cache: Store Access Token
+    Backend-->>Frontend: Return ID Token & User Info
+    Frontend->>Frontend: Store ID Token
+```
+
+### Token Types and Exchange Process
+```mermaid
+graph TD
+    A[Authorization Code] -->|Exchange| B[Token Set]
+    B --> C[ID Token<br/>JWT Format<br/>Authentication]
+    B --> D[Access Token<br/>Short-lived<br/>API Access]
+    B --> E[Refresh Token<br/>Long-lived<br/>Token Renewal]
+    E -->|When Access Token Expires| F[New Access Token]
+```
+
+### Token Types and Purposes
+
+1. **Authorization Code**
+   - Temporary, one-time code
+   - Generated by Google OAuth consent screen
+   - Used to obtain other tokens
+   - Short-lived (minutes)
+   - Can only be used once
+
+2. **ID Token**
+   - JWT (JSON Web Token) format
+   - Used for authentication
+   - Contains user information (email, name, etc.)
+   - Signed by Google
+   - Example:
+     ```json
+     {
+       "iss": "https://accounts.google.com",
+       "sub": "user_id",
+       "email": "user@example.com",
+       "name": "User Name",
+       "iat": 1516239022,
+       "exp": 1516242622
+     }
+     ```
+
+3. **Access Token**
+   - Bearer token format
+   - Used for authorization
+   - Used to access Google APIs (e.g., Gmail API)
+   - Short-lived (1 hour)
+   - Does not contain user information
+
+4. **Refresh Token**
+   - Long-lived token
+   - Used to obtain a new Access Token
+   - Stored in database
+   - Can be revoked by user or application
+
+### Token Storage and Security
+
+1. **Storage Implementation**
+   - Frontend Storage:
+     - Store only ID Token (localStorage)
+     - Used for authentication
+   
+   - Backend Storage:
+     - MongoDB (persistent storage):
+       ```python
+       {
+           "user_email": "user@example.com",
+           "refresh_token": "1//04u...",      # Long-lived
+           "token_type": "Bearer"
+       }
+       ```
+     - Memory Cache (temporary storage):
+       ```python
+       {
+           "user@example.com": {
+               "access_token": "ya29.a0AfB_...",
+               "expires_at": "2024-03-10T10:00:00Z"
+           }
+       }
+       ```
+
+2. **Token Refresh Process**
+   ```mermaid
+   sequenceDiagram
+       Backend->>Cache: Check Access Token
+       alt Token Expired
+           Backend->>MongoDB: Get Refresh Token
+           Backend->>Google: Request New Access Token
+           Google->>Backend: Return New Access Token
+           Backend->>Cache: Update Access Token
+       end
+   ```
+
+3. **Security Considerations**
+   - Authorization Code: Temporary, HTTPS transmission
+   - Access Token: Short-lived, in-memory storage
+   - Refresh Token: Encrypted storage, backend access only
+   - ID Token: Frontend storage, for authentication
+
+### Token Management Functions
+```python
+# Token Store Operations
+async def get_user_tokens(user_email: str) -> TokenInfo
+async def update_user_tokens(user_email: str, token_data: TokenInfo)
+async def delete_user_tokens(user_email: str)
+
+# Token Service Operations
+async def exchange_id_token(id_token: str) -> TokenInfo
+async def refresh_access_token(refresh_token: str) -> TokenInfo
+```
+
+## Configuration
+
+### Environment Variables
+Required environment variables for setup:
+- `GMAIL_CLIENT_ID`: Google OAuth client ID
+- `GMAIL_CLIENT_SECRET`: Google OAuth client secret
+- `GMAIL_REDIRECT_URIS`: OAuth callback URL
+
+### OAuth Scopes
+The application requires the following Gmail API scopes:
+- `https://www.googleapis.com/auth/gmail.readonly`
+- `https://www.googleapis.com/auth/userinfo.email`
+
+## Internationalization
+
+The feature supports multiple languages including:
+- English (en)
+- Chinese (zh)
+- Traditional Chinese (zh-tw)
+- Japanese (ja)
+- Spanish (es)
+- Korean (ko)
+
+## Security Considerations
+
+1. **Token Storage**
+   - Tokens are stored securely in MongoDB
+   - In-memory cache used for performance optimization
+   - Automatic token refresh handling
+
+2. **Authentication Flow**
+   - Implements standard OAuth 2.0 flow
+   - Uses secure token exchange
+   - Implements token expiration handling
+
+## Error Handling
+
+The system implements comprehensive error handling for:
+- OAuth authentication failures
+- Email fetching errors
+- Processing service errors
+- Rate limiting and throttling
+
+## Performance Optimization
+
+1. **Caching Strategy**
+   - Two-tier caching system for email analysis results:
+     - TTLCache (in-memory): Fast access, 7 days TTL
+     - MongoDB (persistent): Long-term storage, 360 days TTL
+   - Optimized email fetching process:
+     - First fetch only message IDs
+     - Check cache status for each message ID
+     - For cached messages:
+       - Only fetch minimal metadata (subject, from, to, date)
+       - Skip body content fetching and parsing
+     - For uncached messages:
+       - Fetch full message content
+       - Perform analysis
+       - Cache results
+   - Token caching for reduced API calls
+   - Batch processing for multiple emails
+
+2. **Rate Limiting**
+   - Implements Gmail API rate limit handling
+   - Batch processing to optimize API usage
+   - Minimizes API calls through efficient caching
+
+### Cache Settings
+```python
+# Memory Cache (TTLCache)
+MAX_TOKEN_CACHE_SIZE = 1000      # Maximum tokens to cache
+TOKEN_CACHE_TTL = 3600          # 1 hour in seconds
+
+MAX_ANALYSIS_CACHE_SIZE = 1000   # Maximum analysis results to cache
+ANALYSIS_CACHE_TTL = 604800     # 7 days in seconds
+
+# MongoDB Cache
+db_cache_ttl_days: int = 360    # 360 days for analysis results
+```
+
+### Email Fetching Process
+```mermaid
+sequenceDiagram
+    participant Client
+    participant EmailService
+    participant GmailAPI
+    participant Cache
+    participant ProcessingService
+    
+    Client->>EmailService: fetch_job_related_emails()
+    EmailService->>GmailAPI: fetch message IDs only
+    GmailAPI-->>EmailService: message IDs
+    
+    loop For each message ID
+        EmailService->>Cache: check cache status
+        alt Message in cache
+            EmailService->>GmailAPI: fetch minimal metadata
+            GmailAPI-->>EmailService: metadata only
+        else Message not in cache
+            EmailService->>GmailAPI: fetch full message
+            GmailAPI-->>EmailService: full message
+            EmailService->>ProcessingService: analyze email
+            ProcessingService->>Cache: store analysis result
+        end
+    end
+    
+    EmailService-->>Client: return results
+```
+
+### Performance Considerations
+
+1. **Cache Hit Rates**
+   - TTLCache provides thread-safe, fast memory access
+   - Automatic expiration reduces stale data
+   - MongoDB provides persistent backup
+   - Optimized email fetching based on cache status
+
+2. **Resource Usage**
+   - TTLCache: Size-limited, auto-expiring cache
+   - Memory usage controlled by maxsize parameter
+   - MongoDB: Auto-expiration after 360 days
+   - Minimal data transfer for cached messages
+
+3. **API Costs**
+   - Minimizes Gmail API calls through:
+     - Only fetching message IDs first
+     - Using metadata-only requests for cached messages
+     - Full content fetch only for uncached messages
+   - Minimizes GPT4O MINI API calls through caching
+   - Caches error results to prevent repeated failures
+   - Batch processing for multiple emails
+
+4. **Optimization Metrics**
+   - Cache hit rate monitoring
+   - API call reduction tracking
+   - Performance logging for:
+     - Cache lookup times
+     - API request times
+     - Analysis processing times
+
+## Error Handling
+
+1. **Cache Initialization**
+   - TTLCache initialization is immediate
+   - Async MongoDB index creation
+   - Graceful degradation if caches unavailable
+
+2. **Analysis Errors**
+   - Cache error results to prevent repeated failures
+   - Structured error responses
+   - Detailed logging for debugging
+
+## Security Considerations
+
+1. **Data Storage**
+   - No sensitive email content stored
+   - Only analysis results cached
+   - TTL ensures data cleanup
+
+2. **Access Control**
+   - MongoDB authentication required
+   - TTLCache isolated per instance
+   - Thread-safe cache access 

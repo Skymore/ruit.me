@@ -1,17 +1,172 @@
 ---
 title: 'MongoDB Integration for Token Management and Email Analysis Caching'
-date: '2025-01-17'
+date: '2025-02-04'
 tags: ['mongodb', 'database', 'caching', 'performance', 'system-design', 'architecture']
 draft: false
 summary: 'A detailed exploration of MongoDB integration for token management and email analysis caching, focusing on database structure, performance optimization, and security considerations.'
-images: ['/static/images/banners/database-server-room-with-blue-lights__taylor-vick__M5tzZtFCOfs.jpeg']
+images: ['/static/images/banners/mongodb-cache-flow.png']
 authors: ['default']
 ---
 
 Implementing a robust and efficient database system for token management and caching requires careful consideration of data structure, performance, and security. This article explores our MongoDB integration, focusing on how we handle token management and implement a two-tier caching system for email analysis results.
 
-## Database Architecture Overview
+# MongoDB Integration
 
-Our MongoDB integration is designed with performance and security in mind, implementing a two-tier caching architecture that combines in-memory caching with persistent storage. Let's explore the implementation details and best practices:
+## Overview
+This document describes the MongoDB integration in our application, focusing on token management and email analysis caching.
 
-[Content of the original document follows, starting from the Database Structure section...] 
+## Database Structure
+
+### Collections
+1. **tokens**
+   - Stores refresh tokens and user info
+   - TTL index for automatic cleanup of unused tokens
+   ```javascript
+   {
+       email: String,          // User's email (unique index)
+       refresh_token: String,  // Long-lived refresh token
+       redirect_uri: String,   // Optional OAuth redirect URI
+       updated_at: Date,       // Last update timestamp
+       // Note: access_token is only stored in TTLCache, not in MongoDB
+   }
+   ```
+
+2. **email_analysis_cache**
+   - Stores email analysis results
+   - TTL index for 360-day expiration
+   ```javascript
+   {
+       message_id: String,     // Email message ID (unique index)
+       result: {
+           status: String,     // Job application status
+           company: String,    // Company name
+           position: String,   // Position title
+           date: String,       // Relevant date
+           details: String,    // Additional details
+           confidence: Number  // Analysis confidence score
+       },
+       cached_at: Date        // Cache timestamp (TTL index)
+   }
+   ```
+
+## Indexes
+
+### tokens Collection
+```javascript
+// Unique index on email
+db.tokens.createIndex({ "email": 1 }, { unique: true })
+
+// TTL index on updated_at (cleanup after 30 days of no updates)
+db.tokens.createIndex({ "updated_at": 1 }, { expireAfterSeconds: 2592000 })
+
+// Optional: Compound index for email and redirect_uri if needed
+db.tokens.createIndex({ "email": 1, "redirect_uri": 1 })
+```
+
+### email_analysis_cache Collection
+```javascript
+// Unique index on message_id
+db.email_analysis_cache.createIndex({ "message_id": 1 }, { unique: true })
+
+// TTL index for 360-day expiration
+db.email_analysis_cache.createIndex(
+    { "cached_at": 1 },
+    { expireAfterSeconds: 31104000 }  // 360 days
+)
+```
+
+## Two-Tier Caching Architecture
+
+1. **TTLCache (First Layer)**
+   - Thread-safe memory cache
+   - Automatic expiration
+   - Size-limited cache
+   ```python
+   # Token cache configuration
+   token_cache = TTLCache(
+       maxsize=MAX_TOKEN_CACHE_SIZE,    # 1000 items
+       ttl=TOKEN_CACHE_TTL,             # 1 hour
+   )
+
+   # Analysis cache configuration
+   analysis_cache = TTLCache(
+       maxsize=MAX_ANALYSIS_CACHE_SIZE,  # 1000 items
+       ttl=ANALYSIS_CACHE_TTL,          # 7 days
+   )
+   ```
+
+2. **MongoDB (Second Layer)**
+   - Fast access for frequently used data
+   - 360-day TTL for email analysis
+   - 30-day TTL for unused tokens
+   - Automatic cleanup
+   - Persistent storage for refresh tokens
+
+## Performance Optimization
+
+1. **Indexing Strategy**
+   - Unique indexes for fast lookups
+   - TTL indexes for automatic cleanup
+   - Compound indexes where needed
+
+2. **Query Optimization**
+   - TTLCache reduces DB load
+   - Thread-safe operations
+   - Batch operations for multiple documents
+
+3. **Resource Management**
+   - Automatic cleanup of old data
+   - Connection pooling
+   - Asynchronous operations
+
+## Monitoring and Maintenance
+
+### Key Metrics
+1. **Cache Performance**
+   - TTLCache hit rate
+   - Cache size utilization
+   - MongoDB query patterns
+
+2. **Storage Usage**
+   - Collection sizes
+   - Index sizes
+   - Document counts
+
+### Maintenance Commands
+```bash
+# Check collection stats
+db.email_analysis_cache.stats()
+db.tokens.stats()
+
+# Check index usage
+db.email_analysis_cache.aggregate([
+    { $indexStats: {} }
+])
+
+# Monitor cache hit rates
+db.serverStatus().metrics.commands
+```
+
+## Error Handling
+
+1. **Connection Issues**
+   - Automatic reconnection
+   - Connection pooling
+   - Retry mechanisms
+
+2. **Data Integrity**
+   - Unique constraints
+   - Data validation
+   - Error logging
+
+## Security
+
+1. **Access Control**
+   - MongoDB authentication required
+   - Collection-level permissions
+   - Encrypted connections
+
+2. **Data Protection**
+   - No sensitive email content stored
+   - Only analysis results and tokens
+   - Automatic data cleanup 

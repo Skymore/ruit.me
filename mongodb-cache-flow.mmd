@@ -1,0 +1,18 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'arial', 'lineWidth': '2px' }}}%%
+graph LR
+    Client[Client Request] --> Check{Check In-Memory Cache}
+    Check -->|Hit| ReturnCache[Return Result]
+    Check -->|Miss| MongoDB{Check MongoDB Cache}
+    MongoDB -->|Hit| UpdateMem[Update In-Memory Cache]
+    MongoDB -->|Miss| Process[Process Request]
+    UpdateMem --> ReturnCache
+    Process --> SaveBoth[Save to Both Caches]
+    SaveBoth --> ReturnCache
+    
+    style Client fill:#f8e8ff,stroke:#333,stroke-width:2px,color:#000
+    style Check fill:#e8e8ff,stroke:#333,stroke-width:2px,color:#000
+    style MongoDB fill:#e8ffe8,stroke:#333,stroke-width:2px,color:#000
+    style ReturnCache fill:#fff8e8,stroke:#333,stroke-width:2px,color:#000
+    style Process fill:#ffe8e8,stroke:#333,stroke-width:2px,color:#000
+    style SaveBoth fill:#e8ffff,stroke:#333,stroke-width:2px,color:#000
+    style UpdateMem fill:#f8e8ff,stroke:#333,stroke-width:2px,color:#000 
