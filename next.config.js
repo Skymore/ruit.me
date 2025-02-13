@@ -93,6 +93,18 @@ module.exports = () => {
         },
       ]
     },
+    async rewrites() {
+      return [
+        {
+          source: '/favicon.ico',
+          destination: '/static/favicons/favicon.ico',
+        },
+        {
+          source: '/favicon.png',
+          destination: '/static/favicons/favicon.png',
+        },
+      ]
+    },
     webpack: (config) => {
       config.module.rules.push({
         test: /\.svg$/,
