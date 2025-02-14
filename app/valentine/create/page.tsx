@@ -29,6 +29,7 @@ export default function CreateValentinePage() {
   const isMobile = useIsMobile()
   const [config, setConfig] = useState<ValentineConfig>(DEFAULT_VALENTINE_CONFIG)
   const [showPreview, setShowPreview] = useState(false)
+  const [generatedUrl, setGeneratedUrl] = useState<string | null>(null)
 
   const handleChange = (section: keyof ValentineConfig, field: string, value: any) => {
     if (section === 'lang') {
@@ -90,22 +91,41 @@ export default function CreateValentinePage() {
 
       const { id } = await response.json()
       const url = `${window.location.origin}/valentine/${id}`
+      setGeneratedUrl(url)
 
-      // 尝试复制到剪贴板（部分移动设备可能不支持）
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(url)
+      // Check the current language for alerts
+      const alertMessage =
+        config.lang === 'zh'
+          ? `链接已生成！\n\n${url}\n\n请点击下方的复制按钮复制链接。`
+          : `Link generated!\n\n${url}\n\nPlease click the copy button below to copy the link.`
+
+      // Show alert message without attempting to copy or open link on mobile
+      if (isMobile) {
+        alert(alertMessage)
       } else {
-        alert(`链接已生成：\n${url}\n请手动复制链接`)
-      }
-
-      // 尝试在新标签页中打开链接（部分移动设备可能被拦截）
-      const newTab = window.open(url, '_blank')
-      if (!newTab) {
-        alert(`无法自动打开链接，请点击链接复制后手动打开：\n${url}`)
+        // On desktop, try to copy to clipboard and open in new tab
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(url)
+          window.open(url, '_blank') // 先打开新窗口
+          alert(alertMessage) // 再显示提示
+        } else {
+          alert(alertMessage)
+        }
       }
     } catch (error) {
       console.error('Failed to generate link:', error)
-      alert('生成链接失败，请重试。')
+      alert(
+        config.lang === 'zh'
+          ? '生成链接失败，请重试。'
+          : 'Failed to generate link, please try again.'
+      )
+    }
+  }
+
+  const handleCopy = async () => {
+    if (generatedUrl) {
+      await navigator.clipboard.writeText(generatedUrl)
+      alert(config.lang === 'zh' ? '链接已复制！' : 'Link copied!')
     }
   }
 
@@ -132,6 +152,17 @@ export default function CreateValentinePage() {
           </motion.button>
         </div>
       </div>
+
+      {generatedUrl && (
+        <div className="mb-4">
+          <button
+            onClick={handleCopy}
+            className="rounded-full bg-blue-500 px-6 py-2 text-white hover:bg-blue-600"
+          >
+            {config.lang === 'zh' ? '复制链接' : 'Copy Link'}
+          </button>
+        </div>
+      )}
 
       {showPreview ? (
         <ValentinePageContent config={config} />
