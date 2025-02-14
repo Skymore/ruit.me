@@ -4,9 +4,21 @@ import React, { useEffect, useRef, useState } from 'react'
 
 interface SpaceShooterGameProps {
   onGameComplete: (won: boolean) => void
+  duration?: number
+  targetScore?: number
+  customEmojis?: {
+    heart?: string
+    gift?: string
+    aircraft?: string
+  }
 }
 
-export default function SpaceShooterGame({ onGameComplete }: SpaceShooterGameProps) {
+export default function SpaceShooterGame({
+  onGameComplete,
+  duration = 20,
+  targetScore = 10,
+  customEmojis,
+}: SpaceShooterGameProps) {
   // Game area dimensions (pixels)
   const GAME_WIDTH = typeof window !== 'undefined' ? Math.min(300, window.innerWidth - 32) : 300
   const GAME_HEIGHT = typeof window !== 'undefined' ? Math.min(450, window.innerHeight - 200) : 450
@@ -32,7 +44,7 @@ export default function SpaceShooterGame({ onGameComplete }: SpaceShooterGamePro
     bullets: [] as { id: number; x: number; y: number }[],
     hearts: [] as { id: number; x: number; y: number }[],
     score: 0,
-    timeLeft: 20,
+    timeLeft: duration,
     gameState: 'playing' as 'playing' | 'won' | 'lost',
   })
 
@@ -141,7 +153,7 @@ export default function SpaceShooterGame({ onGameComplete }: SpaceShooterGamePro
       scoreRef.current += hitsThisFrame
 
       // === 7️⃣ Game win/lose detection ===
-      if (scoreRef.current >= 10) {
+      if (scoreRef.current >= targetScore) {
         gameStateRef.current = 'won'
         onGameComplete(true)
       }
@@ -151,7 +163,7 @@ export default function SpaceShooterGame({ onGameComplete }: SpaceShooterGamePro
       if (currentTime - lastTimerUpdateRef.current >= 1000) {
         timeLeftRef.current -= 1
         lastTimerUpdateRef.current = currentTime
-        if (timeLeftRef.current === 0 && scoreRef.current < 10) {
+        if (timeLeftRef.current === 0 && scoreRef.current < targetScore) {
           gameStateRef.current = 'lost'
           onGameComplete(false)
         }
@@ -248,7 +260,7 @@ export default function SpaceShooterGame({ onGameComplete }: SpaceShooterGamePro
           }}
         >
           <div className="text-3xl" style={{ transform: 'rotate(-45deg)' }}>
-            ✈️
+            {customEmojis?.aircraft || '✈️'}
           </div>
         </div>
 
@@ -274,19 +286,21 @@ export default function SpaceShooterGame({ onGameComplete }: SpaceShooterGamePro
             className="absolute text-2xl text-pink-300"
             style={{ left: heart.x, top: heart.y }}
           >
-            ❤️
+            {customEmojis?.heart || '❤️'}
           </div>
         ))}
 
         {/* 🖥️ HUD */}
         <div className="absolute left-2 top-2 text-sm text-gray-100">
           Time: {renderData.timeLeft}s <br />
-          Score: {renderData.score}/10
+          Score: {renderData.score}/{targetScore}
         </div>
       </div>
       <div className="mt-4 text-center text-gray-700 dark:text-gray-100">
         <p>Use arrow keys or WASD to control the aircraft (touch screen for mobile devices)</p>
-        <p>Shoot down 10 hearts within 20 seconds to win $200 reward!</p>
+        <p>
+          Shoot down {targetScore} hearts within {duration} seconds to win your reward!
+        </p>
       </div>
     </div>
   )

@@ -3,15 +3,19 @@ import { db } from './index'
 import { statsTable, type StatsType } from './schema'
 
 export async function getBlogStats(type: StatsType, slug: string) {
-  let stats = await db
+  const stats = await db
     .select()
     .from(statsTable)
     .where(and(eq(statsTable.type, type), eq(statsTable.slug, slug)))
-  if (stats.length) {
+    .execute()
+
+  if (stats.length > 0) {
     return stats[0]
   }
-  let newStats = await db.insert(statsTable).values({ type, slug }).returning()
-  return newStats[0]
+
+  const [newStats] = await db.insert(statsTable).values({ type, slug }).returning()
+
+  return newStats
 }
 
 export async function updateBlogStats(
@@ -19,19 +23,20 @@ export async function updateBlogStats(
   slug: string,
   updates: { [key: string]: any }
 ) {
-  let currentStats = await getBlogStats(type, slug)
+  const currentStats = await getBlogStats(type, slug)
 
-  // Safeguard against negative updates
-  for (let key in updates) {
-    if (typeof updates[key] === 'number' && updates[key] < currentStats[key]) {
-      updates[key] = currentStats[key]
+  // 遍历更新字段，并确保不会更新为比当前值更低的数值
+  for (const key in updates) {
+    if (typeof updates[key] === 'number' && currentStats[key] !== undefined) {
+      updates[key] = Math.max(currentStats[key], updates[key])
     }
   }
 
-  let updatedStats = await db
+  const [updatedStats] = await db
     .update(statsTable)
     .set(updates)
     .where(and(eq(statsTable.type, type), eq(statsTable.slug, slug)))
     .returning()
-  return updatedStats[0]
+
+  return updatedStats
 }

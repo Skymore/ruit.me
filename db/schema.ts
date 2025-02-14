@@ -1,4 +1,12 @@
-import { integer, pgEnum, pgTable, primaryKey, varchar } from 'drizzle-orm/pg-core'
+import {
+  integer,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  varchar,
+  jsonb,
+  timestamp,
+} from 'drizzle-orm/pg-core'
 
 export let typeEnum = pgEnum('type', ['blog', 'snippet'])
 
@@ -20,5 +28,14 @@ export let statsTable = pgTable(
   }
 )
 
+export const valentineTable = pgTable('valentine', {
+  id: varchar('id', { length: 6 }).primaryKey(),
+  config: jsonb('config').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+})
+
 export type StatsType = (typeof typeEnum.enumValues)[number]
 export type SelectStats = typeof statsTable.$inferSelect
+export type SelectValentine = typeof valentineTable.$inferSelect
+export type InsertValentine = typeof valentineTable.$inferInsert
