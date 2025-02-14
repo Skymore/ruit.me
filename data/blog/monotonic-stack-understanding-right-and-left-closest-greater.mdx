@@ -1,0 +1,177 @@
+---
+title: 'Monotonic Stack: Understanding RightClosestGreater and LeftClosestGreaterOrEqual'
+date: '2025-02-13'
+tags: ['algorithms', 'data-structures', 'python', 'stack', 'programming']
+draft: false
+summary: 'A comprehensive guide to understanding and implementing monotonic stack for solving RightClosestGreater and LeftClosestGreaterOrEqual problems, with detailed explanations and Python implementation.'
+images: ['/static/images/banners/monotonic_stack.jpg']
+authors: ['sky']
+---
+
+## Introduction
+
+A monotonic stack is an efficient data structure for solving problems that involve finding the first element to the left or right that satisfies a certain condition. It often provides solutions with O(n) time complexity, making it suitable for large-scale array operations.
+
+In this article, we will discuss how to use a monotonic stack to compute:
+
+- **RightClosestGreater**: For each element, the next greater element to the right.  
+- **LeftClosestGreaterOrEqual**: For each element, the closest element to the left that is greater or equal.  
+
+We will maintain the stack in a **non-strictly decreasing** order based on the condition that:
+
+> **If the new element is greater than the element at the top of the stack, the new element is the RightClosestGreater for the popped element.**
+
+After handling the popping phase, if the stack is not empty, the top of the stack is the **LeftClosestGreaterOrEqual** for the current element.
+
+## Algorithm Overview
+
+1. **Initialization**  
+   We initialize:  
+   - A `RightClosestGreater` array of length `n` (where `n` is the size of the input array), filled with `n` to indicate that no greater element is found to the right by default.  
+   - A `LeftClosestGreaterOrEqual` array of length `n`, filled with `-1` to indicate that no greater or equal element is found to the left by default.  
+   - A stack `st` to maintain indices of elements. For this problem, we maintain the stack in **non-strictly decreasing** order, which means:  
+     - For any two indices `i` and `j` in the stack with `i` below `j`, we have `nums[i] >= nums[j]`.
+
+2. **Traversal**  
+   We iterate through the array from left to right. For each element `nums[i]`:  
+   - While the stack is not empty and `nums[i]` is greater than `nums[st.top()]`, we pop the top element from the stack.  
+     - For the popped element `nums[idx]`, the current element `nums[i]` is its **RightClosestGreater**.  
+   - After the popping phase, if the stack is not empty, `st.top()` is the **LeftClosestGreaterOrEqual** for the current element.  
+   - Finally, we push the current index `i` onto the stack to maintain the stack property.
+
+3. **Monotonic Stack Behavior**  
+   Since the stack is non-strictly decreasing, each new element is compared against the top of the stack until a greater or equal element is found. This ensures that every element is pushed and popped at most once, achieving O(n) complexity.
+
+## Code Implementation (Python)
+
+```python
+def find_right_and_left_closest_greater(nums):
+    n = len(nums)
+    # Initialize RightClosestGreater: default n means no greater element found
+    RightClosestGreater = [n] * n
+    # Initialize LeftClosestGreaterOrEqual: default -1 means no such element
+    LeftClosestGreaterOrEqual = [-1] * n
+
+    # 'st' is a monotonic stack storing indices.
+    # It is maintained in a non-strictly decreasing order:
+    # For indices i and j, if i is below j, then nums[i] >= nums[j].
+    st = []
+
+    # Traverse the array from left to right
+    for i in range(n):
+        # While stack is not empty and the current element nums[i] is greater than
+        # the element at the index stored at the top of the stack...
+        while st and nums[i] > nums[st[-1]]:
+            # The new element nums[i] is the RightClosestGreater for the popped element
+            idx = st.pop()
+            RightClosestGreater[idx] = i
+
+        # If the stack is not empty after the while loop,
+        # the top element is the LeftClosestGreaterOrEqual for the current element
+        if st:
+            LeftClosestGreaterOrEqual[i] = st[-1]
+
+        # Push the current index to the stack
+        st.append(i)
+
+    return RightClosestGreater, LeftClosestGreaterOrEqual
+
+
+# Example usage
+nums = [3, 1, 4, 2]
+RightClosestGreater, LeftClosestGreaterOrEqual = find_right_and_left_closest_greater(nums)
+
+# Print the results
+print("Index:                    ", [i for i in range(len(nums))])
+print("Nums:                     ", nums)
+print("RightClosestGreater:      ", RightClosestGreater)
+print("LeftClosestGreaterOrEqual:", LeftClosestGreaterOrEqual)
+```
+
+## Step-by-Step Walkthrough
+
+For the input array:
+
+```
+nums = [3, 1, 4, 2]
+```
+
+**Step 1: i = 0 (nums[0] = 3)**  
+- Stack empty → push index `0`.  
+- `st = [0]`  
+- LeftClosestGreaterOrEqual[0] = -1 (no element to the left).  
+
+**Step 2: i = 1 (nums[1] = 1)**  
+- `nums[1] = 1 < nums[st[-1]] = 3` → push index `1`.  
+- `st = [0, 1]`  
+- LeftClosestGreaterOrEqual[1] = 0 (index 0 has `3`, which is greater than or equal to `1`).  
+
+**Step 3: i = 2 (nums[2] = 4)**  
+- `nums[2] = 4 > nums[st[-1]] = 1` → pop index `1`:  
+  - RightClosestGreater[1] = 2 (4 is the next greater element for `1`).  
+- `nums[2] = 4 > nums[st[-1]] = 3` → pop index `0`:  
+  - RightClosestGreater[0] = 2 (4 is the next greater element for `3`).  
+- Stack empty → push index `2`.  
+- `st = [2]`  
+- LeftClosestGreaterOrEqual[2] = -1 (no greater-or-equal element to the left).  
+
+**Step 4: i = 3 (nums[3] = 2)**  
+- `nums[3] = 2 < nums[st[-1]] = 4` → push index `3`.  
+- `st = [2, 3]`  
+- LeftClosestGreaterOrEqual[3] = 2 (index 2 has `4`, which is greater than or equal to `2`).  
+
+**Final Stack State:**  
+- `st = [2, 3]`
+
+**Final Arrays:**  
+- **RightClosestGreater:** `[2, 2, 4, 4]`  
+- **LeftClosestGreaterOrEqual:** `[-1, 0, -1, 2]`
+
+## Explanation of the Final Arrays
+
+1. **RightClosestGreater:**  
+   For each element, it stores the index of the next greater element to the right.  
+   - Index 0 (`3`): Next greater element is at index 2 (`4`).  
+   - Index 1 (`1`): Next greater element is at index 2 (`4`).  
+   - Index 2 (`4`): No greater element to the right → value is `4` (the array length).  
+   - Index 3 (`2`): No greater element to the right → value is `4`.
+
+2. **LeftClosestGreaterOrEqual:**  
+   For each element, it stores the index of the closest greater or equal element to the left.  
+   - Index 0 (`3`): No left element → `-1`.  
+   - Index 1 (`1`): Left closest greater or equal is index 0 (`3`).  
+   - Index 2 (`4`): No greater or equal element on the left → `-1`.  
+   - Index 3 (`2`): Left closest greater or equal is index 2 (`4`).
+
+## Complexity Analysis
+
+- **Time Complexity:** O(n) — Each element is pushed onto and popped from the stack at most once.  
+- **Space Complexity:** O(n) — We store two arrays of size `n` and maintain a stack.
+
+## Variations and Applications
+
+1. **Nearest Smaller Elements:**  
+   By reversing the comparison condition, we can find the next smaller elements to the right or the closest smaller elements to the left.
+
+2. **Histogram Largest Rectangle:**  
+   A monotonic stack can find the largest rectangle in a histogram in O(n) time.
+
+3. **Stock Span Problem:**  
+   The monotonic stack helps compute the number of consecutive days with a price less than or equal to the current day's price.
+
+4. **Sliding Window Maximum:**  
+   A monotonic deque (double-ended queue) can find the maximum value in a sliding window.
+
+## Conclusion
+
+The monotonic stack, when maintained in **non-strictly decreasing** or **non-strictly increasing** order based on the comparison condition, can efficiently solve various "nearest greater or smaller" problems.  
+
+In this implementation, we calculated:  
+- **RightClosestGreater** — the next greater element to the right (initialized with `n`).  
+- **LeftClosestGreaterOrEqual** — the closest greater or equal element to the left (initialized with `-1`).  
+
+The core insight:  
+> **If the new element is greater than the element at the top of the stack, it becomes the RightClosestGreater for the popped element.**  
+After popping, the top of the stack (if it exists) is the **LeftClosestGreaterOrEqual** for the new element.  
+
+With one pass and O(n) complexity, monotonic stacks provide a clean and optimal solution to these classical array problems. 
