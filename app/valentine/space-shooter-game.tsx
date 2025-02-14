@@ -296,12 +296,6 @@ export default function SpaceShooterGame({
           Score: {renderData.score}/{targetScore}
         </div>
       </div>
-      <div className="mt-4 text-center text-gray-700 dark:text-gray-100">
-        <p>Use arrow keys or WASD to control the aircraft (touch screen for mobile devices)</p>
-        <p>
-          Shoot down {targetScore} hearts within {duration} seconds to win your reward!
-        </p>
-      </div>
     </div>
   )
 }

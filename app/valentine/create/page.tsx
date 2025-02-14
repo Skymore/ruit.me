@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
+import { useRouter } from 'next/navigation'
 import {
   DEFAULT_VALENTINE_CONFIG,
   DEFAULT_VALENTINE_CONFIG_ZH,
@@ -9,7 +10,23 @@ import {
 } from '~/data/valentine-config'
 import ValentinePageContent from '../page-content'
 
+// 自定义 Hook 检测是否为手机端（宽度小于 768px 视为手机）
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+  return isMobile
+}
+
 export default function CreateValentinePage() {
+  const router = useRouter()
+  const isMobile = useIsMobile()
   const [config, setConfig] = useState<ValentineConfig>(DEFAULT_VALENTINE_CONFIG)
   const [showPreview, setShowPreview] = useState(false)
 
@@ -20,7 +37,7 @@ export default function CreateValentinePage() {
         newLang === 'zh' ? DEFAULT_VALENTINE_CONFIG_ZH : DEFAULT_VALENTINE_CONFIG
 
       setConfig((prev) => {
-        // Check if each field has been modified from its default value
+        // 检查各字段是否为默认值
         const isRecipientDefault =
           prev.recipient.name === DEFAULT_VALENTINE_CONFIG.recipient.name ||
           prev.recipient.name === DEFAULT_VALENTINE_CONFIG_ZH.recipient.name
@@ -74,13 +91,21 @@ export default function CreateValentinePage() {
       const { id } = await response.json()
       const url = `${window.location.origin}/valentine/${id}`
 
-      // Copy to clipboard
-      await navigator.clipboard.writeText(url)
-      // Open in new tab
-      window.open(url, '_blank')
+      // 尝试复制到剪贴板（部分移动设备可能不支持）
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url)
+      } else {
+        alert(`链接已生成：\n${url}\n请手动复制链接`)
+      }
+
+      // 尝试在新标签页中打开链接（部分移动设备可能被拦截）
+      const newTab = window.open(url, '_blank')
+      if (!newTab) {
+        alert(`无法自动打开链接，请点击链接复制后手动打开：\n${url}`)
+      }
     } catch (error) {
       console.error('Failed to generate link:', error)
-      alert('Failed to generate link. Please try again.')
+      alert('生成链接失败，请重试。')
     }
   }
 

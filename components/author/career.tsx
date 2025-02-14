@@ -13,7 +13,8 @@ const EXPERIENCES = [
     start: 'Sep 2023',
     end: 'Jun 2025 (Expected)',
     title: 'MS in Electrical and Computer Engineering',
-    icon: 'graduation-cap',
+    location: 'Seattle, WA',
+    icon: 'man-student',
     event: 'education-uw',
     details: () => {
       return (
@@ -37,10 +38,25 @@ const EXPERIENCES = [
     details: () => {
       return (
         <ul className="[&>li]:my-2 [&>li]:pl-0">
-          <li>Architected a high-performance well log platform with <strong>React</strong>/<strong>Flask</strong>/<strong>MongoDB</strong> stack on <strong>Azure</strong>, featuring well log generation, model lifecycle management, interactive data visualization, and real-time task monitoring.</li>
-          <li>Engineered parallel task processing system using <strong>Python multiprocessing</strong> to bypass GIL, achieving 8x throughput for concurrent tasks (well log generation/model training/model prediction).</li>
-          <li>Implemented well log resolution enhancement using <strong>Autoencoder-SVR</strong> hybrid model with <strong>TensorFlow</strong>.</li>
-          <li>Optimized system performance through multi-level caching, file-based atomic operations, and process-safe queues.</li>
+          <li>
+            Architected a high-performance well log platform with <strong>React</strong>/
+            <strong>Flask</strong>/<strong>MongoDB</strong> stack on <strong>Azure</strong>,
+            featuring well log generation, model lifecycle management, interactive data
+            visualization, and real-time task monitoring.
+          </li>
+          <li>
+            Engineered parallel task processing system using <strong>Python multiprocessing</strong>{' '}
+            to bypass GIL, achieving 8x throughput for concurrent tasks (well log generation/model
+            training/model prediction).
+          </li>
+          <li>
+            Implemented well log resolution enhancement using <strong>Autoencoder-SVR</strong>{' '}
+            hybrid model with <strong>TensorFlow</strong>.
+          </li>
+          <li>
+            Optimized system performance through multi-level caching, file-based atomic operations,
+            and process-safe queues.
+          </li>
         </ul>
       )
     },
@@ -58,10 +74,33 @@ const EXPERIENCES = [
     details: () => {
       return (
         <ul className="[&>li]:my-2 [&>li]:pl-0">
-          <li>Implemented an efficient pathfinding system for an SLG game using an optimized <strong>A* algorithm</strong> on a <strong>Lua</strong> and <strong>C++</strong> hybrid model, capable of handling a 1500×1500 hex grid within <strong>200ms</strong>, with path smoothing optimization.</li>
-          <li>Developed a <a href="https://youtu.be/CFG76TDBImw">Roguelike Shooter</a> demo using <strong>Lua</strong> and a <strong>custom timer</strong> with adjustable timescale, pause, and resume.</li>
-          <li>Created the <strong>game replay system</strong> for online card game <a href="https://store.steampowered.com/app/3052450/Morimens/"><strong>Morimens</strong></a>, with the <strong>server</strong> storing game frame instructions and states on an <strong>OSS service</strong>, and the <strong>client</strong> retrieving data directly from OSS and replaying.</li>
-          <li>Optimized the <strong>social system</strong> for <strong>Morimens</strong> with <strong>segmented caching</strong>, <strong>asynchronous preloading</strong>, and <strong>selective retrieval</strong>, reducing <strong>avg</strong> and <strong>max RPC times</strong> by <strong>83.2%</strong> and <strong>99.1%</strong>, earning positive feedback.</li>
+          <li>
+            Implemented an efficient pathfinding system for an SLG game using an optimized{' '}
+            <strong>A* algorithm</strong> on a <strong>Lua</strong> and <strong>C++</strong> hybrid
+            model, capable of handling a 1500×1500 hex grid within <strong>200ms</strong>, with path
+            smoothing optimization.
+          </li>
+          <li>
+            Developed a <a href="https://youtu.be/CFG76TDBImw">Roguelike Shooter</a> demo using{' '}
+            <strong>Lua</strong> and a <strong>custom timer</strong> with adjustable timescale,
+            pause, and resume.
+          </li>
+          <li>
+            Created the <strong>game replay system</strong> for online card game{' '}
+            <a href="https://store.steampowered.com/app/3052450/Morimens/">
+              <strong>Morimens</strong>
+            </a>
+            , with the <strong>server</strong> storing game frame instructions and states on an{' '}
+            <strong>OSS service</strong>, and the <strong>client</strong> retrieving data directly
+            from OSS and replaying.
+          </li>
+          <li>
+            Optimized the <strong>social system</strong> for <strong>Morimens</strong> with{' '}
+            <strong>segmented caching</strong>, <strong>asynchronous preloading</strong>, and{' '}
+            <strong>selective retrieval</strong>, reducing <strong>avg</strong> and{' '}
+            <strong>max RPC times</strong> by <strong>83.2%</strong> and <strong>99.1%</strong>,
+            earning positive feedback.
+          </li>
         </ul>
       )
     },
@@ -79,10 +118,22 @@ const EXPERIENCES = [
     details: () => {
       return (
         <ul className="[&>li]:my-2 [&>li]:pl-0">
-          <li>Processed video frames and converted tracking datasets to object detection datasets, correcting annotations.</li>
-          <li>Merged <strong>VisDrone</strong> and custom datasets into a comprehensive traffic dataset with data augmentation.</li>
-          <li>Trained and evaluated models using <strong>YOLOv8x</strong> and <strong>GELAN-C</strong>, achieving mAP@0.50 of <strong>0.545</strong> and <strong>0.52</strong>.</li>
-          <li>Integrated <strong>YOLOv8/9</strong> with <strong>ByteTrack</strong> for vehicle tracking and counting in video footage.</li>
+          <li>
+            Processed video frames and converted tracking datasets to object detection datasets,
+            correcting annotations.
+          </li>
+          <li>
+            Merged <strong>VisDrone</strong> and custom datasets into a comprehensive traffic
+            dataset with data augmentation.
+          </li>
+          <li>
+            Trained and evaluated models using <strong>YOLOv8x</strong> and <strong>GELAN-C</strong>
+            , achieving mAP@0.50 of <strong>0.545</strong> and <strong>0.52</strong>.
+          </li>
+          <li>
+            Integrated <strong>YOLOv8/9</strong> with <strong>ByteTrack</strong> for vehicle
+            tracking and counting in video footage.
+          </li>
         </ul>
       )
     },
@@ -95,7 +146,7 @@ const EXPERIENCES = [
     end: 'Jun 2020',
     title: 'MS in Computer Science and Technology',
     location: 'Qingdao, China',
-    icon: 'graduation-cap',
+    icon: 'man-student',
     event: 'education-sdu',
     details: () => {
       return (
@@ -113,7 +164,7 @@ const EXPERIENCES = [
     end: 'Jun 2017',
     title: 'BS in Marine Science',
     location: 'Qingdao, China',
-    icon: 'graduation-cap',
+    icon: 'man-student',
     event: 'education-ouc',
     details: () => {
       return (
@@ -122,7 +173,7 @@ const EXPERIENCES = [
         </ul>
       )
     },
-  }
+  },
 ]
 
 export function CareerTimeline() {
@@ -185,8 +236,8 @@ function TimelineItem({ exp, last }: { exp: (typeof EXPERIENCES)[0]; last?: bool
           />
           <div className="flex flex-col">
             <div className="line-clamp-1 text-xs tabular-nums text-gray-500 dark:text-gray-400">
-              <span>{start}</span> – <span>{end}</span>
-              {location && <span className="ml-2">| {location}</span>}
+              {/* <span>{start}</span> – <span>{end}  |  </span> */}
+              {location && <span className="">{location}</span>}
             </div>
             <Link
               href={url}

@@ -39,7 +39,7 @@ const SOCIALS = [
     href: `mailto:${SITE_METADATA.email}`,
     Icon: () => <Mail size={20} strokeWidth={1.5} />,
     umamiEvent: 'profile-card-email',
-  }
+  },
 ]
 
 export function ProfileCardInfo() {
@@ -76,7 +76,7 @@ export function ProfileCardInfo() {
             {SITE_METADATA.email}
           </a>
         </div>
-        <div className="flex items-center text-gray-700 dark:text-gray-200">
+        {/* <div className="flex items-center text-gray-700 dark:text-gray-200">
           <FileText strokeWidth={1.5} size={20} />
           <a
             href={SITE_METADATA.resumeUrl}
@@ -86,7 +86,7 @@ export function ProfileCardInfo() {
           >
             Resume
           </a>
-        </div>
+        </div> */}
         <div className="flex gap-3">
           {SOCIALS.map(({ platform, handle, href, Icon, umamiEvent }) => {
             return (

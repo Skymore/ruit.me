@@ -8,6 +8,25 @@ import { DEFAULT_VALENTINE_CONFIG, type ValentineConfig } from '~/data/valentine
 import clsx from 'clsx'
 import { useSearchParams } from 'next/navigation'
 
+/**
+ * 自定义 Hook，用于检测是否为手机端
+ * （此处以屏幕宽度小于768px为判断标准，可根据需求自行修改）
+ */
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    function checkIsMobile() {
+      setIsMobile(window.innerWidth < 768)
+    }
+    checkIsMobile() // 组件挂载后先执行一次
+    window.addEventListener('resize', checkIsMobile)
+    return () => window.removeEventListener('resize', checkIsMobile)
+  }, [])
+
+  return isMobile
+}
+
 interface ValentinePageProps {
   config?: ValentineConfig
 }
@@ -58,8 +77,11 @@ export default function ValentinePageContent({ config: propConfig }: ValentinePa
   const [gameWon, setGameWon] = useState(false)
   const [config, setConfig] = useState<ValentineConfig>(propConfig || DEFAULT_VALENTINE_CONFIG)
 
+  // 检测是否为移动端
+  const isMobile = useIsMobile()
+
   useEffect(() => {
-    // 从 URL 参数中读取配置
+    // 从 URL 参数中读取配置（如果有）
     const configParam = searchParams?.get('config')
     if (configParam) {
       try {
@@ -165,21 +187,24 @@ export default function ValentinePageContent({ config: propConfig }: ValentinePa
           ))}
         </motion.div>
 
-        <motion.div variants={fadeInUp} className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
-          {['Love', 'Joy', 'Forever'].map((word, index) => (
-            <motion.div
-              key={word}
-              className="rounded-lg bg-white p-6 shadow-lg backdrop-blur-sm dark:bg-gray-700/50"
-              whileHover={{ scale: 1.05 }}
-              transition={{ duration: 0.2 }}
-            >
-              <h3 className="text-xl font-semibold text-red-500 dark:text-red-200">{word}</h3>
-              <motion.div animate={heartbeat} className="mt-2 text-red-400 dark:text-red-200">
-                <Heart size={24} />
+        {/* 当检测到是移动端时，不渲染这三个卡片 */}
+        {!isMobile && (
+          <motion.div variants={fadeInUp} className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
+            {['Love', 'Joy', 'Forever'].map((word) => (
+              <motion.div
+                key={word}
+                className="rounded-lg bg-white p-6 shadow-lg backdrop-blur-sm dark:bg-gray-700/50"
+                whileHover={{ scale: 1.05 }}
+                transition={{ duration: 0.2 }}
+              >
+                <h3 className="text-xl font-semibold text-red-500 dark:text-red-200">{word}</h3>
+                <motion.div animate={heartbeat} className="mt-2 text-red-400 dark:text-red-200">
+                  <Heart size={24} />
+                </motion.div>
               </motion.div>
-            </motion.div>
-          ))}
-        </motion.div>
+            ))}
+          </motion.div>
+        )}
 
         <motion.div variants={fadeInUp} className="mt-8">
           {!showGame && !showGiftMessage && (
