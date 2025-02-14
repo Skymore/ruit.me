@@ -26,7 +26,7 @@ This blog is built with modern web technologies:
 - 💨 [Tailwind CSS](https://tailwindcss.com/) for styling
 - ⚡ [Vercel](https://vercel.com/) for hosting
 
-Based on the excellent [Tailwind Nextjs Starter Blog](https://github.com/timlrxx/tailwind-nextjs-starter-blog) by Timothy Lin, with several enhancements:
+Based on the excellent [Tailwind Nextjs Starter Blog](https://github.com/timlrx/tailwind-nextjs-starter-blog) by Timothy Lin, with several enhancements:
 
 - ⚛️ Upgraded to **React 18+** and **NextJS 14+** with App Router
 - 🎯 Full **TypeScript** support with strict type checking
