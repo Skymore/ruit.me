@@ -67,6 +67,7 @@ module.exports = () => {
     output,
     basePath,
     reactStrictMode: true,
+    productionBrowserSourceMaps: true,
     pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'],
     images: {
       remotePatterns: [
