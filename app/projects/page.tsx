@@ -4,17 +4,23 @@ import { Container } from '~/components/ui/container'
 import { PageHeader } from '~/components/ui/page-header'
 import { PROJECTS } from '~/data/projects'
 import { fetchRepoData } from '~/utils/github'
+import type { Project } from '~/types/data'
 
 export let metadata = genPageMetadata({ title: 'Projects' })
 
 export const dynamic = 'force-dynamic'
 
 export default async function Projects() {
-  await Promise.all(
-    PROJECTS.map(async (p) => {
-      if (p.repo) {
-        p.repo = await fetchRepoData({ repo: p.repo as string })
+  const projectsWithRepoData = await Promise.all(
+    PROJECTS.map(async (project) => {
+      if (typeof project.repo === 'string') {
+        const repoData = await fetchRepoData({ repo: project.repo })
+        return {
+          ...project,
+          repo: repoData
+        } satisfies Project
       }
+      return project
     })
   )
 
@@ -27,7 +33,7 @@ export default async function Projects() {
       />
       <div className="py-5 md:py-10">
         <div className="grid grid-cols-1 gap-6">
-          {PROJECTS.map((pro) => (
+          {projectsWithRepoData.map((pro) => (
             <ProjectCard key={pro.title} project={pro} />
           ))}
         </div>
