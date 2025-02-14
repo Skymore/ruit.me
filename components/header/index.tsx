@@ -7,6 +7,7 @@ import { KbarSearchTrigger } from '~/components/search/kbar-trigger'
 import { Container } from '~/components/ui/container'
 import { GrowingUnderline } from '~/components/ui/growing-underline'
 import { Link } from '~/components/ui/link'
+import { Twemoji } from '~/components/ui/twemoji'
 import { HEADER_NAV_LINKS } from '~/data/navigation'
 import { SITE_METADATA } from '~/data/site-metadata'
 import { Logo } from './logo'
@@ -20,7 +21,7 @@ function logASCIItext() {
     "              _  _                       \r\n             (_)| |                      \r\n _ __  _   _  _ | |_     _ __ ___    ___ \r\n| '__|| | | || || __|   | '_ ` _ \\  / _ \\\r\n| |   | |_| || || |_  _ | | | | | ||  __/\r\n|_|    \\__,_||_| \\__|(_)|_| |_| |_| \\___|\r\n                                         \r\n                                         \r\n"
   )
   console.log('🧑‍💻 View source:', SITE_METADATA.siteRepo)
-  console.log('🙌 Let\'s connect:', SITE_METADATA.linkedin)
+  console.log("🙌 Let's connect:", SITE_METADATA.linkedin)
   logged = true
 }
 
@@ -41,7 +42,7 @@ export function Header() {
         <Logo />
         <div className="flex items-center gap-4">
           <div className="hidden gap-1.5 sm:flex">
-            {HEADER_NAV_LINKS.map(({ title, href }) => {
+            {HEADER_NAV_LINKS.map(({ title, href, emoji }) => {
               let isActive = pathname.startsWith(href)
               return (
                 <Link key={title} href={href} className="px-3 py-1 font-medium">
@@ -49,7 +50,14 @@ export function Header() {
                     className={clsx(isActive && 'bg-[length:100%_50%]')}
                     data-umami-event={`nav-${href.replace('/', '')}`}
                   >
-                    {title}
+                    {href === '/valentine' ? (
+                      <span className="flex items-center gap-1">
+                        <Twemoji emoji="red-heart" />
+                        {title}
+                      </span>
+                    ) : (
+                      title
+                    )}
                   </GrowingUnderline>
                 </Link>
               )

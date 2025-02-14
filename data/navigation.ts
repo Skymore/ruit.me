@@ -6,6 +6,7 @@ export const HEADER_NAV_LINKS = [
   { href: '/snippets', title: 'Snippets', emoji: 'dna' },
   { href: '/about', title: 'About', emoji: 'billed-cap' },
   { href: '/tags', title: 'Tags', emoji: 'label' },
+  { href: '/valentine', title: 'Valentine', emoji: 'red-heart' },
 ]
 
 export const FOOTER_NAV_LINKS = [

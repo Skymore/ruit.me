@@ -1,0 +1,401 @@
+---
+title: "Creating a Valentine's Day Special Page with Next.js and Framer Motion"
+date: '2025-02-14'
+tags: ['next.js', 'react', 'typescript', 'framer-motion', 'game-development']
+draft: false
+summary: "A comprehensive guide on creating an interactive Valentine's Day special page using Next.js, Framer Motion, and TypeScript, featuring a mini-game and gift redemption system."
+images: ['/static/images/banners/valentine.png']
+authors: ['sky']
+---
+
+# Creating a Valentine's Day Special Page with Next.js and Framer Motion
+
+In this blog post, I'll share how I created a special Valentine's Day page using Next.js, Framer Motion, and TypeScript. The page features beautiful animations, an interactive mini-game, and a gift redemption system. Let's dive into the technical implementation details and explore how to create engaging web experiences.
+
+## Project Overview
+
+The Valentine's Day special page consists of three main components:
+
+1. An animated love letter with smooth transitions and heartbeat effects
+2. A mobile-friendly space shooter mini-game
+3. A gift code redemption system with conditional rendering
+
+Let's explore each component and see how they work together.
+
+## The Animated Love Letter
+
+The love letter section uses Framer Motion for smooth animations. Here's how we implemented the fade-in and heartbeat animations:
+
+```tsx
+const fadeInUp = {
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.6 },
+}
+
+const heartbeat = {
+  scale: [1, 1.2, 1],
+  transition: {
+    duration: 0.8,
+    repeat: Infinity,
+    repeatType: 'reverse' as const,
+  },
+}
+```
+
+These animations create a welcoming and dynamic feel as users first load the page. The love letter content is wrapped in motion components that use these animations:
+
+```tsx
+<motion.div variants={fadeInUp} className="prose max-w-none dark:prose-invert">
+  <p className="text-lg text-gray-700 dark:text-gray-100 md:text-xl">Dear Wenlin,</p>
+  <p className="text-lg text-gray-700 dark:text-gray-100 md:text-xl">
+    Every moment with you is a gift that I cherish deeply...
+  </p>
+</motion.div>
+```
+
+## The Space Shooter Mini-game
+
+The mini-game is built entirely with React hooks and declarative rendering, making it lightweight and performant. Using React's state management and refs, we achieved smooth gameplay while maintaining code maintainability. It features responsive design and works seamlessly on both desktop and mobile devices.
+
+Key features include:
+
+- Responsive game area that adapts to screen size
+- Dual control system: keyboard (arrow keys/WASD) and touch controls
+- Auto-firing bullet system
+- Heart collection with collision detection
+- Score tracking and countdown timer
+- Win condition: collect 10 hearts within 20 seconds
+
+Here's the core game implementation:
+
+```tsx
+export default function SpaceShooterGame({ onGameComplete }: SpaceShooterGameProps) {
+  // Responsive game dimensions
+  const GAME_WIDTH = typeof window !== 'undefined' ? Math.min(300, window.innerWidth - 32) : 300
+  const GAME_HEIGHT = typeof window !== 'undefined' ? Math.min(450, window.innerHeight - 200) : 450
+
+  // Proportional element sizes
+  const SHIP_SIZE = Math.min(40, Math.floor(GAME_WIDTH / 10))
+  const BULLET_WIDTH = Math.max(3, Math.floor(SHIP_SIZE / 8))
+  const BULLET_HEIGHT = Math.max(6, Math.floor(SHIP_SIZE / 4))
+  const HEART_SIZE = Math.min(30, Math.floor(GAME_WIDTH / 13))
+
+  // Game state management using refs for performance
+  const shipPosRef = useRef(renderData.shipPos)
+  const bulletsRef = useRef(renderData.bullets)
+  const heartsRef = useRef(renderData.hearts)
+  const scoreRef = useRef(renderData.score)
+  const timeLeftRef = useRef(renderData.timeLeft)
+  const gameStateRef = useRef(renderData.gameState)
+
+  // Mobile touch controls
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (gameStateRef.current !== 'playing') return
+    const touch = e.touches[0]
+    if (!gameAreaRef.current) return
+    const rect = gameAreaRef.current.getBoundingClientRect()
+    const x = touch.clientX - rect.left - SHIP_SIZE / 2
+    const y = touch.clientY - rect.top - SHIP_SIZE / 2
+    shipPosRef.current.x = Math.max(0, Math.min(GAME_WIDTH - SHIP_SIZE, x))
+    shipPosRef.current.y = Math.max(0, Math.min(GAME_HEIGHT - SHIP_SIZE, y))
+  }
+}
+```
+
+### Performance Optimizations
+
+The game implements several performance optimizations:
+
+1. Using refs for frequently updated values to avoid unnecessary re-renders
+2. Implementing a frame-based update system
+3. Using CSS transforms and will-change for better rendering performance
+4. Optimizing touch events for mobile devices
+
+```tsx
+return (
+  <div className="flex touch-none flex-col items-center justify-center p-4">
+    <div
+      ref={gameAreaRef}
+      className="relative overflow-hidden rounded-lg bg-gray-800 shadow-lg will-change-transform"
+      style={{
+        width: GAME_WIDTH,
+        height: GAME_HEIGHT,
+        touchAction: 'none',
+        WebkitUserSelect: 'none',
+        userSelect: 'none',
+      }}
+      onTouchMove={handleTouchMove}
+      onTouchStart={handleTouchStart}
+    >
+      {/* Game elements */}
+    </div>
+  </div>
+)
+```
+
+## Gift Redemption System
+
+The gift system uses React state management to handle the game completion and code display:
+
+```tsx
+const [showGiftMessage, setShowGiftMessage] = useState(false)
+const [gameWon, setGameWon] = useState(false)
+
+const handleGameComplete = (won: boolean) => {
+  setGameWon(won)
+  setShowGame(false)
+  setShowGiftMessage(true)
+}
+```
+
+When players win the game, they receive a special gift code that can be redeemed for a Valentine's Day gift.
+
+## Mobile Responsiveness
+
+The page is fully responsive and optimized for both desktop and mobile devices:
+
+1. Responsive game area that adapts to screen size:
+
+   - Width: Min(300px, screen width - 32px)
+   - Height: Min(450px, screen height - 200px)
+
+2. Touch controls for mobile users with optimized event handling
+3. Proportional sizing for game elements based on screen dimensions
+4. Dark mode support with carefully chosen colors
+
+## Technical Challenges and Solutions
+
+During development, we encountered and solved several challenges:
+
+1. **Touch Event Handling**: Implemented touch controls without interfering with page scrolling using CSS properties:
+
+```css
+touchAction: 'none',
+WebkitUserSelect: 'none',
+userSelect: 'none'
+```
+
+2. **Responsive Design**: Created a fully responsive game area that adapts to different screen sizes while maintaining playability:
+
+```tsx
+const GAME_WIDTH = typeof window !== 'undefined' ? Math.min(300, window.innerWidth - 32) : 300
+const GAME_HEIGHT = typeof window !== 'undefined' ? Math.min(450, window.innerHeight - 200) : 450
+```
+
+3. **Performance Optimization**: Used React refs and requestAnimationFrame for smooth gameplay:
+
+```tsx
+useEffect(() => {
+  let animationFrameId: number
+  const update = (timestamp: number) => {
+    // Game logic update
+    animationFrameId = requestAnimationFrame(update)
+  }
+  animationFrameId = requestAnimationFrame(update)
+  return () => cancelAnimationFrame(animationFrameId)
+}, [])
+```
+
+## Conclusion
+
+Creating this Valentine's Day special page was an exciting project that combines modern web technologies with interactive elements. The combination of Next.js, Framer Motion, and TypeScript provided a solid foundation for building an engaging user experience that works well across all devices.
+
+The source code is available on GitHub, feel free to use it as inspiration for your own special occasion pages!
+
+---
+
+# 使用 Next.js 和 Framer Motion 创建情人节特别页面
+
+在这篇博客文章中，我将分享如何使用 Next.js、Framer Motion 和 TypeScript 创建一个特别的情人节页面。该页面包含精美的动画效果、互动小游戏和礼物兑换系统。让我们深入了解技术实现细节，探索如何创建引人入胜的网页体验。
+
+## 项目概述
+
+情人节特别页面由三个主要组件构成：
+
+1. 带有平滑过渡和心跳效果的动画情书
+2. 移动端友好的射击小游戏
+3. 带条件渲染的礼物码兑换系统
+
+让我们探索每个组件是如何协同工作的。
+
+## 动画情书
+
+情书部分使用 Framer Motion 实现平滑动画。以下是淡入和心跳动画的实现方式：
+
+```tsx
+const fadeInUp = {
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.6 },
+}
+
+const heartbeat = {
+  scale: [1, 1.2, 1],
+  transition: {
+    duration: 0.8,
+    repeat: Infinity,
+    repeatType: 'reverse' as const,
+  },
+}
+```
+
+这些动画在用户首次加载页面时创造出温馨动态的感觉。情书内容被包装在使用这些动画的 motion 组件中：
+
+```tsx
+<motion.div variants={fadeInUp} className="prose max-w-none dark:prose-invert">
+  <p className="text-lg text-gray-700 dark:text-gray-100 md:text-xl">Dear Wenlin,</p>
+  <p className="text-lg text-gray-700 dark:text-gray-100 md:text-xl">
+    Every moment with you is a gift that I cherish deeply...
+  </p>
+</motion.div>
+```
+
+## 射击小游戏
+
+小游戏完全使用 React hooks 和声明式渲染构建，使其轻量且高效。通过 React 的状态管理和 refs，我们实现了流畅的游戏体验，同时保持代码的可维护性。它具有响应式设计，在桌面和移动设备上都能完美运行。
+
+Key features include:
+
+- Responsive game area that adapts to screen size
+- Dual control system: keyboard (arrow keys/WASD) and touch controls
+- Auto-firing bullet system
+- Heart collection with collision detection
+- Score tracking and countdown timer
+- Win condition: collect 10 hearts within 20 seconds
+
+Here's the core game implementation:
+
+```tsx
+export default function SpaceShooterGame({ onGameComplete }: SpaceShooterGameProps) {
+  // Responsive game dimensions
+  const GAME_WIDTH = typeof window !== 'undefined' ? Math.min(300, window.innerWidth - 32) : 300
+  const GAME_HEIGHT = typeof window !== 'undefined' ? Math.min(450, window.innerHeight - 200) : 450
+
+  // Proportional element sizes
+  const SHIP_SIZE = Math.min(40, Math.floor(GAME_WIDTH / 10))
+  const BULLET_WIDTH = Math.max(3, Math.floor(SHIP_SIZE / 8))
+  const BULLET_HEIGHT = Math.max(6, Math.floor(SHIP_SIZE / 4))
+  const HEART_SIZE = Math.min(30, Math.floor(GAME_WIDTH / 13))
+
+  // Game state management using refs for performance
+  const shipPosRef = useRef(renderData.shipPos)
+  const bulletsRef = useRef(renderData.bullets)
+  const heartsRef = useRef(renderData.hearts)
+  const scoreRef = useRef(renderData.score)
+  const timeLeftRef = useRef(renderData.timeLeft)
+  const gameStateRef = useRef(renderData.gameState)
+
+  // Mobile touch controls
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (gameStateRef.current !== 'playing') return
+    const touch = e.touches[0]
+    if (!gameAreaRef.current) return
+    const rect = gameAreaRef.current.getBoundingClientRect()
+    const x = touch.clientX - rect.left - SHIP_SIZE / 2
+    const y = touch.clientY - rect.top - SHIP_SIZE / 2
+    shipPosRef.current.x = Math.max(0, Math.min(GAME_WIDTH - SHIP_SIZE, x))
+    shipPosRef.current.y = Math.max(0, Math.min(GAME_HEIGHT - SHIP_SIZE, y))
+  }
+}
+```
+
+### Performance Optimizations
+
+The game implements several performance optimizations:
+
+1. Using refs for frequently updated values to avoid unnecessary re-renders
+2. Implementing a frame-based update system
+3. Using CSS transforms and will-change for better rendering performance
+4. Optimizing touch events for mobile devices
+
+```tsx
+return (
+  <div className="flex touch-none flex-col items-center justify-center p-4">
+    <div
+      ref={gameAreaRef}
+      className="relative overflow-hidden rounded-lg bg-gray-800 shadow-lg will-change-transform"
+      style={{
+        width: GAME_WIDTH,
+        height: GAME_HEIGHT,
+        touchAction: 'none',
+        WebkitUserSelect: 'none',
+        userSelect: 'none',
+      }}
+      onTouchMove={handleTouchMove}
+      onTouchStart={handleTouchStart}
+    >
+      {/* Game elements */}
+    </div>
+  </div>
+)
+```
+
+## Gift Redemption System
+
+The gift system uses React state management to handle the game completion and code display:
+
+```tsx
+const [showGiftMessage, setShowGiftMessage] = useState(false)
+const [gameWon, setGameWon] = useState(false)
+
+const handleGameComplete = (won: boolean) => {
+  setGameWon(won)
+  setShowGame(false)
+  setShowGiftMessage(true)
+}
+```
+
+When players win the game, they receive a special gift code that can be redeemed for a Valentine's Day gift.
+
+## Mobile Responsiveness
+
+The page is fully responsive and optimized for both desktop and mobile devices:
+
+1. Responsive game area that adapts to screen size:
+
+   - Width: Min(300px, screen width - 32px)
+   - Height: Min(450px, screen height - 200px)
+
+2. Touch controls for mobile users with optimized event handling
+3. Proportional sizing for game elements based on screen dimensions
+4. Dark mode support with carefully chosen colors
+
+## Technical Challenges and Solutions
+
+During development, we encountered and solved several challenges:
+
+1. **Touch Event Handling**: Implemented touch controls without interfering with page scrolling using CSS properties:
+
+```css
+touchAction: 'none',
+WebkitUserSelect: 'none',
+userSelect: 'none'
+```
+
+2. **Responsive Design**: Created a fully responsive game area that adapts to different screen sizes while maintaining playability:
+
+```tsx
+const GAME_WIDTH = typeof window !== 'undefined' ? Math.min(300, window.innerWidth - 32) : 300
+const GAME_HEIGHT = typeof window !== 'undefined' ? Math.min(450, window.innerHeight - 200) : 450
+```
+
+3. **Performance Optimization**: Used React refs and requestAnimationFrame for smooth gameplay:
+
+```tsx
+useEffect(() => {
+  let animationFrameId: number
+  const update = (timestamp: number) => {
+    // Game logic update
+    animationFrameId = requestAnimationFrame(update)
+  }
+  animationFrameId = requestAnimationFrame(update)
+  return () => cancelAnimationFrame(animationFrameId)
+}, [])
+```
+
+## Conclusion
+
+Creating this Valentine's Day special page was an exciting project that combines modern web technologies with interactive elements. The combination of Next.js, Framer Motion, and TypeScript provided a solid foundation for building an engaging user experience that works well across all devices.
+
+The source code is available on GitHub, feel free to use it as inspiration for your own special occasion pages!
