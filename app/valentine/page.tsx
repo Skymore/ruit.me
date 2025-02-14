@@ -3,8 +3,9 @@
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import ValentinePageContent from './page-content'
+import { Suspense } from 'react'
 
-export default function Page() {
+export default function ValentinePage() {
   return (
     <div className="relative min-h-screen">
       {/* 创建按钮区域 */}
@@ -36,7 +37,9 @@ export default function Page() {
             ↓ Preview Example ↓
           </div>
         </div>
-        <ValentinePageContent />
+        <Suspense fallback={<div>Loading...</div>}>
+          <ValentinePageContent />
+        </Suspense>
       </div>
     </div>
   )

@@ -1,0 +1,168 @@
+---
+title: "Building a Valentine's Day Page Creator with Next.js"
+date: '2025-02-14'
+tags: ['nextjs', 'typescript', 'game-development', 'system-design']
+draft: false
+summary: "A technical deep dive into building a Valentine's Day page creator that allows users to create personalized pages with custom games and messages."
+images: ['/static/images/banners/valentine2.png']
+authors: ['default']
+---
+
+## Introduction
+
+Recently, I implemented a Valentine's Day page creator feature that allows users to create personalized Valentine's pages with customizable games and messages. In this post, I'll share the technical details of how this system was built, including the database design, API implementation, and frontend architecture.
+
+## System Architecture
+
+The system consists of three main components:
+
+1. **Page Creator Interface**: A form-based UI for customizing Valentine's pages
+2. **API Layer**: Handles page creation and retrieval
+3. **Database Layer**: Stores page configurations and settings
+
+### Database Schema
+
+The valentine configuration is stored in a MongoDB collection with the following structure:
+
+```typescript
+interface ValentineConfig {
+  recipient: string
+  sender: string
+  message: string
+  gameSettings: {
+    duration: number // Game duration in seconds
+    targetScore: number // Required score to win
+    customEmojis?: {
+      // Optional custom emojis
+      player?: string
+      target?: string
+    }
+  }
+  language: 'en' | 'zh' // Support for multiple languages
+  createdAt: Date
+}
+```
+
+### API Implementation
+
+The API routes handle page creation and retrieval:
+
+```typescript
+// POST /api/valentine
+export async function POST(req: Request) {
+  try {
+    const body = await req.json()
+    const config = await validateConfig(body)
+
+    const record = await db.valentine.create({
+      config,
+      createdAt: new Date(),
+    })
+
+    return Response.json({ id: record.id })
+  } catch (error) {
+    return Response.json({ error: 'Failed to create page' }, { status: 500 })
+  }
+}
+
+// GET /api/valentine?id={id}
+export async function GET(req: Request) {
+  const id = new URL(req.url).searchParams.get('id')
+  if (!id) {
+    return Response.json({ error: 'Missing id' }, { status: 400 })
+  }
+
+  const record = await getValentineConfig(id)
+  if (!record) {
+    return Response.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  return Response.json(record)
+}
+```
+
+### Page Creation Flow
+
+The page creation process follows these steps:
+
+1. User fills out the creation form with:
+
+   - Recipient name
+   - Personal message
+   - Game settings
+   - Language preference
+
+2. Form data is validated and sent to the API
+
+3. API creates a new record and returns a unique ID
+
+4. User gets a shareable link to their Valentine's page
+
+```tsx
+export default function CreatePage() {
+  const [config, setConfig] = useState<ValentineConfig>({
+    recipient: '',
+    sender: '',
+    message: '',
+    gameSettings: {
+      duration: 20,
+      targetScore: 10,
+    },
+    language: 'en',
+  })
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const response = await fetch('/api/valentine', {
+      method: 'POST',
+      body: JSON.stringify(config),
+    })
+    const { id } = await response.json()
+    // Redirect to the created page
+    router.push(`/valentine/${id}`)
+  }
+
+  return <form onSubmit={handleSubmit}>{/* Form fields */}</form>
+}
+```
+
+## Dynamic Page Generation
+
+Each Valentine's page is dynamically generated based on the stored configuration:
+
+```tsx
+export default async function Page({ params }: { params: { id: string } }) {
+  const { id } = params
+  const record = await getValentineConfig(id)
+
+  if (!record) {
+    return notFound()
+  }
+
+  return <ValentinePageContent config={record.config} />
+}
+```
+
+## Performance Considerations
+
+Several optimizations were implemented:
+
+1. **Database Indexing**: Created indexes on frequently queried fields
+2. **Caching**: Implemented caching for page configurations
+3. **Validation**: Added robust input validation to prevent invalid data
+4. **Error Handling**: Comprehensive error handling throughout the system
+
+## Future Improvements
+
+Potential enhancements for the future:
+
+1. **Analytics**: Track page views and interactions
+2. **More Customization**: Additional game types and themes
+3. **Social Sharing**: Better social media integration
+4. **Preview Mode**: Allow users to preview before sharing
+
+## Conclusion
+
+Building this Valentine's Day page creator was an interesting challenge that combined several aspects of modern web development. The system provides a fun and interactive way for users to create personalized Valentine's messages while maintaining good performance and reliability.
+
+The combination of Next.js, TypeScript, and MongoDB provided a solid foundation for building this feature, while careful attention to user experience and performance ensured a smooth creation process.
