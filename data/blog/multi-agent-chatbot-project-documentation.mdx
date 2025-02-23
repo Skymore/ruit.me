@@ -1,0 +1,88 @@
+---
+title: 'Multi-Agent Chatbot Project Documentation'
+date: '2025-02-23'
+tags: ['ai', 'chatbot', 'system-design', 'architecture', 'llm']
+draft: false
+summary: 'A comprehensive documentation of a multi-agent chatbot project, exploring system architecture, implementation challenges, and insights gained from building a complex AI system with limited API calls.'
+images: ['/static/images/blog/chatbox/chatbox_system_hand.png']
+authors: ['sky']
+---
+
+# Multi-Agent Chatbot / 多代理聊天机器人
+
+---
+
+## System Architecture / 系统架构
+
+![System Architecture](/static/images/blog/chatbox/system.svg)
+
+## Handwritten System Architecture / 手写系统架构
+
+![System Architecture](/static/images/blog/chatbox/chatbox_system_hand.png)
+
+---
+
+## Project Challenges and Insights / 项目挑战与见解
+
+**English:**  
+While working on this multi-agent chatbot project, I faced several challenges and gained valuable insights along the way. One of the biggest challenges was handling prompt injection and detecting obnoxious content. Since I was limited to only two LLM API calls, designing a system that could accurately identify malicious or irrelevant queries while maintaining efficiency was quite difficult. To overcome this, I had to carefully craft input prompts and combine multiple tasks—such as detecting obnoxious content, verifying query relevance, and preventing prompt injection—into a single API call. This required a deep understanding of prompt engineering and extensive testing to ensure the system's reliability.
+
+Through this assignment, I learned how to implement complex functionalities without relying on specific APIs and with limited resources. This experience deepened my understanding of prompt engineering techniques and how to optimize the efficiency of LLM calls. Additionally, I gained an appreciation for the importance of modular design. By separating different functionalities into independent agents, the system became easier to maintain and extend while also improving overall flexibility. These experiences have provided me with a solid foundation for developing more advanced AI systems in the future.
+
+**简体中文：**  
+在进行这个多代理聊天机器人项目时，我面临了多个挑战，并从中获得了宝贵的见解。其中最大的挑战之一是处理提示注入以及侦测令人不悦的内容。由于我仅限使用两次 LLM API 调用，设计一个既能准确识别恶意或不相关查询又能保持高效率的系统相当困难。为了解决这个问题，我必须精心设计输入提示，并将多个任务——如侦测令人不悦的内容、验证查询相关性以及防止提示注入——整合到一次 API 调用中。这需要对提示工程有深刻的理解，并进行广泛测试以确保系统的可靠性。
+
+通过这个项目，我学会了如何在不依赖特定 API 且资源有限的情况下实现复杂功能。这段经历加深了我对提示工程技术的理解，并让我掌握了如何优化 LLM 调用的效率。此外，我也认识到了模块化设计的重要性。通过将不同功能分离成独立代理，系统变得更易于维护和扩展，同时也提升了整体灵活性。这些经验为我未来开发更先进的 AI 系统奠定了坚实的基础。
+
+---
+
+## Implementation Details / 实现细节
+
+### Agent Components / 代理组件
+
+1. **Head Agent 主控代理**
+
+   - System coordinator / 系统协调者
+   - Manages query flow / 管理查询流程
+   - Coordinates between sub-agents / 协调各子代理之间的工作
+
+2. **Filtering Agents 过滤代理**
+
+   - Security check / 安全检查
+   - ML relevance verification / 机器学习相关性验证
+   - Efficient dual-purpose filtering / 高效的双重过滤功能
+
+3. **Query Agent 查询代理**
+
+   - Vector similarity search / 基于向量的相似度搜索
+   - Document retrieval / 文件检索
+   - Context management / 上下文管理
+
+4. **Answering Agent 回答代理**
+   - Response generation / 生成回答
+   - Context integration / 整合上下文
+   - Dual response modes / 提供双重回答模式
+
+### Technical Specifications / 技术规格
+
+- Maximum 3 LLM API calls per query / 每次查询最多 3 次 LLM API 调用
+- Vector-based document retrieval / 基于向量的文件检索
+- Streamlit web interface / Streamlit 网页界面
+- Modular agent architecture / 模块化代理架构
+
+---
+
+## Screenshots - Streamlit Interface / 截图 - Streamlit 界面
+
+![Streamlit Interface](/static/images/blog/chatbox/streamlit_interface.png)
+
+![Streamlit Interface2](/static/images/blog/chatbox/streamlit_interface2.png)
+
+---
+
+## Future Improvements / 未来改进方向
+
+1. Enhanced document retrieval accuracy / 提升文件检索准确性
+2. Expanded response customization / 扩充回答定制功能
+3. Improved conversation context handling / 改善对话上下文处理
+4. Advanced security measures / 强化安全措施
