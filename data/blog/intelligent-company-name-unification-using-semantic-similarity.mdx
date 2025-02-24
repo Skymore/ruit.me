@@ -1,0 +1,45 @@
+---
+title: 'Intelligent Company Name Unification Using Semantic Similarity'
+date: '2025-02-25'
+tags: ['ai', 'nlp', 'semantic-similarity', 'performance', 'caching', 'mongodb']
+draft: false
+summary: 'A detailed exploration of implementing an intelligent company name unification system using semantic similarity, featuring OpenAI embeddings and a two-tier caching system for 95x performance improvement.'
+images:
+  [
+    '/static/images/banners/graphs-of-performance-analytics-on-a-laptop-screen__lukechesser__JKUTrJ4vK00.jpeg',
+  ]
+authors: ['sky']
+---
+
+## Overview
+
+In modern email processing systems, one common challenge is dealing with variations of company names. The same company might appear with slightly different names across multiple emails - for example, "Microsoft Corp", "Microsoft Corporation", or "Microsoft Inc". This post describes how we implemented an intelligent system to unify these company names using semantic similarity.
+
+## Implementation
+
+### Core Features
+
+- OpenAI's text-embedding-3-large model for semantic analysis
+- Batch processing with similarity threshold ≥ 0.7
+- MongoDB-based caching system
+
+### Performance Improvement
+
+Implemented a MongoDB-based and local TTLCache-based caching system to cache company embeddings, achieved 95x performance improvement.
+
+- Without cache: ~1.8s per API call
+- With cache: ~0.019s per request
+- 95x performance improvement
+
+## Future Improvements
+
+1. **Advanced Matching**
+
+   - Company subsidiaries recognition
+   - Multilingual support
+
+2. **Analytics**
+   - Industry classification
+   - Company relationship tracking
+
+This solution significantly improves data consistency and processing efficiency in our email analysis system.
