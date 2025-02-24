@@ -1,0 +1,188 @@
+---
+title: 'TODO System Integration with Ewith Email Analysis'
+date: '2025-02-26'
+tags: ['system-design', 'architecture', 'todo', 'email-analysis', 'integration']
+draft: false
+summary: 'A comprehensive documentation of the TODO system integration with email analysis, covering system architecture, implementation details, and best practices for managing interview-related tasks.'
+images: ['/static/images/blog/todo/image.png']
+authors: ['sky']
+---
+
+# TODO System Integration Documentation
+
+# 待办事项系统集成文档
+
+## Overview 概述
+
+The TODO system is designed to help users track and manage their interview-related tasks, particularly focusing on online assessments and interviews. It is tightly integrated with the Email Analysis system to provide a seamless experience for managing interview processes. Users can manually create and manage TODOs for important emails.
+
+待办事项系统旨在帮助用户跟踪和管理与面试相关的任务，特别是在线评估和面试。它与邮件分析系统紧密集成，为管理面试流程提供无缝的体验。用户可以为重要邮件手动创建和管理待办事项。
+
+## System Architecture 系统架构
+
+### Backend Implementation 后端实现
+
+#### 1. Data Models 数据模型
+
+```python
+# server-python/src/models/todo.py
+class TodoType(str, Enum):
+    """Todo Type 待办事项类型"""
+
+    EMAIL = "email"  # 邮件相关
+    INTERVIEW = "interview"  # 面试相关
+    ASSESSMENT = "assessment"  # 评估/测试相关
+    DOCUMENT = "document"  # 文档相关
+    OTHER = "other"  # 其他类型
+
+class TodoStatus(str, Enum):
+    """Todo Status 待办事项状态"""
+
+    TODO = "TODO"
+    DONE = "DONE"
+    BLOCKED = "BLOCKED"
+
+class TodoItem(BaseModel):
+    """Todo Item 待办事项模型"""
+
+    id: str  # unique identifier 唯一标识
+    type: TodoType  # todo type 待办类型
+    status: TodoStatus  # todo status 待办状态
+    title: str  # title 标题
+    description: Optional[str] = None  # description 描述
+    reference_id: str  # reference id (e.g. email id, interview id, etc.) 关联ID（如邮件ID、面试ID等）
+    metadata: Dict[str, Any] = {}  # metadata (e.g. company name, position, etc.) 元数据（如公司名、职位等）
+    created_at: datetime  # created at 创建时间
+    updated_at: datetime  # updated at 更新时间
+    user_email: str  # user email 用户邮箱
+    due_date: Optional[datetime] = None  # due date 截止日期
+```
+
+#### 2. Database Integration 数据库集成
+
+- MongoDB collection: `todo`
+- Indexes on `user_email` and `reference_id` for efficient queries
+- TTL index on `updated_at` for automatic cleanup of old records
+
+#### 3. API Endpoints API端点
+
+```python
+# server-python/src/routes/email_routes.py
+@router.post("/api/emails/{message_id}/todo")
+async def set_email_todo_status(message_id: str, todo_update: TodoStatusUpdate)
+
+@router.get("/api/emails/todos")
+async def get_email_todos()
+```
+
+#### 4. Service Layer 服务层
+
+```python
+# server-python/src/services/todo_service.py
+class TodoService:
+    async def create_todo(self, type: TodoType, title: str, reference_id: str, ...)
+    async def update_todo_status(self, todo_id: str, status: TodoStatus, user_email: str)
+    async def get_todos_by_reference(self, reference_id: str, user_email: str)
+    async def get_todos_by_type(self, type: TodoType, user_email: str)
+```
+
+### Frontend Implementation 前端实现
+
+#### 1. Type Definitions 类型定义
+
+```typescript
+// src/types/todo.ts
+enum TodoStatus {
+  TODO = 'TODO',
+  DONE = 'DONE',
+  BLOCKED = 'BLOCKED',
+}
+```
+
+#### 2. Service Integration 服务集成
+
+```typescript
+// src/services/emailService.ts
+class EmailService {
+  public async setTodoStatus(messageId: string, status: TodoStatus)
+  public async fetchTodos()
+}
+```
+
+#### 3. State Management 状态管理
+
+```typescript
+// Component level state management
+const [todoMap, setTodoMap] = useState<Record<string, TodoStatus>>({})
+const [todoAnchorEl, setTodoAnchorEl] = useState<null | HTMLElement>(null)
+const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
+```
+
+#### 4. UI Components UI组件
+
+- Material-UI Chip component for status display
+- Dropdown menu for status selection
+- Color-coded status indicators
+- Internationalization support for all text
+
+## Integration with Email Analysis 与邮件分析的集成
+
+### 1. Manual TODO Creation 手动创建待办事项
+
+When an email is analyzed and classified as an online assessment or interview invitation, users can manually create a TODO item by clicking the status button. The system will automatically fill in the relevant information from the email analysis.
+
+当邮件被分析并分类为在线评估或面试邀请时，用户可以通过点击状态按钮手动创建待办事项。系统会自动填充来自邮件分析的相关信息。
+
+### 2. Status Synchronization 状态同步
+
+```typescript
+// Frontend status update flow
+const handleTodoChange = async (messageId: string, status: TodoStatus) => {
+  await emailService.setTodoStatus(messageId, status)
+  setTodoMap((prev) => ({
+    ...prev,
+    [messageId]: status,
+  }))
+}
+```
+
+### 3. Visibility Rules 显示规则
+
+TODOs are only shown for emails with specific statuses:
+待办事项仅在特定邮件状态下显示：
+
+- Online Assessment (在线评估)
+- Virtual/Onsite Interview (线上/现场面试)
+
+## User Experience 用户体验
+
+### 1. Visual Feedback 视觉反馈
+
+- TODO: Blue chip (蓝色标签)
+- DONE: Green chip (绿色标签)
+- BLOCKED: Red chip (红色标签)
+- Default: Gray chip (灰色标签)
+
+### 2. Interaction Flow 交互流程
+
+1. User receives interview-related email (用户收到面试相关邮件)
+2. System analyzes email content and type (系统分析邮件内容和类型)
+3. For OA/interview emails, system shows TODO button (对于在线评估/面试邮件，系统显示待办按钮)
+4. User can create and update TODO status (用户可以创建和更新待办状态)
+5. Status changes are immediately reflected (状态变更立即显示)
+
+## Future Extensions 未来扩展
+
+1. Support for more TODO types beyond emails (支持更多类型的待办事项)
+2. Due date and reminder functionality (截止日期和提醒功能)
+3. Integration with calendar systems (日历系统集成)
+4. Batch operations for TODOs (批量操作功能)
+5. Advanced filtering and sorting (高级筛选和排序)
+
+## Best Practices 最佳实践
+
+1. Always handle error cases gracefully (妥善处理错误情况)
+2. Maintain proper state synchronization (保持状态同步)
+3. Follow security best practices (遵循安全最佳实践)
+4. Keep the UI responsive (保持界面响应迅速)
+5. Implement proper validation (实现适当的验证)
