@@ -21,11 +21,11 @@ In modern email processing systems, one common challenge is dealing with variati
 
 - OpenAI's text-embedding-3-large model for semantic analysis
 - Batch processing with similarity threshold ≥ 0.7
-- MongoDB-based caching system
+- MongoDB-based permanent storage system with local TTLCache for performance
 
 ### Performance Improvement
 
-Implemented a MongoDB-based and local TTLCache-based caching system to cache company embeddings, achieved 95x performance improvement.
+Implemented a two-tier caching system with MongoDB permanent storage and local TTLCache for company embeddings, achieved 95x performance improvement.
 
 - Without cache: ~1.8s per API call
 - With cache: ~0.019s per request

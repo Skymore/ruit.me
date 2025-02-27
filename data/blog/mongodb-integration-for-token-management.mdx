@@ -39,11 +39,11 @@ This document describes the MongoDB integration in our application, focusing on 
 
 2. **email_analysis_cache**
    - Stores email analysis results
-   - TTL index for 360-day expiration
+   - Permanent storage for analysis data
    ```javascript
    {
        message_id: String,     // Email message ID (unique index)
-       cached_at: Date        // Cache timestamp (TTL index)
+       cached_at: Date,        // Cache timestamp (for tracking)
        result: {
            subject: String,    // Email subject
            sender: String,     // Email sender
@@ -52,7 +52,7 @@ This document describes the MongoDB integration in our application, focusing on 
            company: String,    // Company name
            position: String,   // Position title
            details: String,    // Additional details
-           confidence: Number  // Analysis confidence score
+           confidence: Number, // Analysis confidence score
            message_id: String  // Email message ID
        },
    }
@@ -73,11 +73,8 @@ db.users.createIndex({ email: 1 }, { unique: true })
 // Unique index on message_id
 db.email_analysis_cache.createIndex({ message_id: 1 }, { unique: true })
 
-// TTL index for 360-day expiration
-db.email_analysis_cache.createIndex(
-  { cached_at: 1 },
-  { expireAfterSeconds: 31104000 } // 360 days
-)
+// Index on cached_at for tracking purposes
+db.email_analysis_cache.createIndex({ cached_at: 1 })
 ```
 
 ## Two-Tier Caching Architecture

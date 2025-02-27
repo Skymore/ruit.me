@@ -55,8 +55,9 @@ This document outlines the implementation of the email analysis feature using Go
      - TTLCache for Gmail access tokens (1 hour TTL)
      - No MongoDB storage for tokens
    - **Analysis Cache**
-     - Memory Cache: Fast access to recent results (7 days TTL)
-     - MongoDB Cache: Long-term storage (360 days TTL)
+     - Memory Cache: Fast access to recent results
+     - MongoDB Cache: Permanent storage for long-term data retention
+     - `cached_at` field for tracking purposes only
 
 4. **Security Layer**
    - JWT-based session management
