@@ -17,7 +17,10 @@ export default function RootTemplate({ children }: { children: React.ReactNode }
     <>
       <TiltedGridBackground className="inset-x-0 top-0 z-[-1] h-[50vh]" />
       <ThemeProviders>
-        <UmamiAnalytics websiteId={SITE_METADATA.analytics.umamiAnalytics.websiteId} />
+        <UmamiAnalytics
+          websiteId={SITE_METADATA.analytics.umamiAnalytics.websiteId}
+          src={SITE_METADATA.analytics.umamiAnalytics.src}
+        />
         <KBarSearchProvider configs={SITE_METADATA.search.kbarConfigs}>
           {!isValentinePage && <Header />}
           <main className="mb-auto grow">{children}</main>

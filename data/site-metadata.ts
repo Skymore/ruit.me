@@ -23,8 +23,8 @@ export const SITE_METADATA = {
   imdbRatingsList: 'https://www.imdb.com/user/your-user-id/ratings',
   analytics: {
     umamiAnalytics: {
-      websiteId: process.env.NEXT_UMAMI_ID,
-      src: process.env.NEXT_UMAMI_URL,
+      websiteId: process.env.NEXT_PUBLIC_UMAMI_ID,
+      src: process.env.NEXT_PUBLIC_UMAMI_URL,
       shareUrl: 'https://cloud.umami.is/share/iKe3AMTcVZgtnyO8/ruit.me',
     },
   },
