@@ -25,7 +25,7 @@ export const SITE_METADATA = {
     umamiAnalytics: {
       websiteId: process.env.NEXT_PUBLIC_UMAMI_ID,
       src: process.env.NEXT_PUBLIC_UMAMI_URL,
-      shareUrl: 'https://cloud.umami.is/share/iKe3AMTcVZgtnyO8/ruit.me',
+      shareUrl: 'https://cloud.umami.is/share/pIQEKekTSn5naxMP/ruit.me',
     },
   },
   newsletter: {
