@@ -8,30 +8,45 @@ import { Twemoji } from '~/components/ui/twemoji'
 import { SITE_METADATA } from '~/data/site-metadata'
 import type { GithubRepository } from '~/types/data'
 import { fetcher } from '~/utils/misc'
+import { formatInTimeZone, toZonedTime } from 'date-fns-tz'
 
 const TIME_IS = 'https://time.is/Seattle'
 const MY_TIMEZONE = 'America/Los_Angeles'
-const MY_TIMEZONE_OFFSET = 8 * 60 // UTC-8
 
 function getTime() {
-  let date = new Date()
-  let visitorTimezoneOffset = date.getTimezoneOffset()
-  let hoursDiff = (visitorTimezoneOffset - MY_TIMEZONE_OFFSET) / 60
-  let diff =
-    hoursDiff === 0
-      ? 'same time'
-      : hoursDiff > 0
-        ? `${hoursDiff}h ahead`
-        : `${hoursDiff * -1}h behind`
+  const now = new Date()
 
-  let time = new Intl.DateTimeFormat('en-US', {
-    timeZone: MY_TIMEZONE,
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  }).format(date)
+  // Format the time in MY_TIMEZONE timezone
+  const timeInMyTimezone = formatInTimeZone(now, MY_TIMEZONE, 'h:mm a')
 
-  return { time, diff }
+  // Get current time in user's timezone
+  const userTime = now
+
+  // Get Seattle time
+  const seattleTime = toZonedTime(now, MY_TIMEZONE)
+
+  // Calculate the difference in hours and minutes
+  const diffInMs = seattleTime.getTime() - userTime.getTime()
+  const diffInHours = diffInMs / (1000 * 60 * 60)
+
+  // Get absolute hours and minutes
+  const absHours = Math.floor(Math.abs(diffInHours))
+  const absMinutes = Math.round((Math.abs(diffInHours) - absHours) * 60)
+
+  // Format the time difference string
+  let diff
+  if (diffInMs === 0) {
+    diff = 'same time'
+  } else {
+    const hourText = absHours > 0 ? `${absHours}h` : ''
+    const minuteText = absMinutes > 0 ? `${absMinutes}m` : ''
+    const separator = hourText && minuteText ? ' ' : ''
+    const timeText = `${hourText}${separator}${minuteText}`
+
+    diff = diffInHours > 0 ? `${timeText} ahead` : `${timeText} behind`
+  }
+
+  return { time: timeInMyTimezone, diff }
 }
 
 export function FooterMeta() {
