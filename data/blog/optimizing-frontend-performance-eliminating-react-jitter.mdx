@@ -1,0 +1,313 @@
+---
+title: '优化前端渲染性能：消除 React 组件抖动现象'
+date: '2025-03-29'
+tags: ['react', 'performance', 'optimization', 'frontend', 'user-experience']
+draft: false
+summary: '分享如何通过优化技术解决React应用中的组件抖动问题，提高用户体验和界面稳定性。'
+images:
+  [
+    '/static/images/banners/graphs-of-performance-analytics-on-a-laptop-screen__lukechesser__JKUTrJ4vK00.jpeg',
+  ]
+authors: ['default']
+---
+
+# 优化前端渲染性能：消除 React 组件抖动现象
+
+# Optimizing Frontend Rendering Performance: Eliminating React Component Jitter
+
+在开发一个基于 React 的实时聊天应用时，我们遇到了一个常见但令人困扰的问题：当用户将鼠标悬停在消息之间时，消息气泡和代码块会发生明显的抖动，影响了用户体验。本文将分享我们如何诊断这一问题并实施性能优化，消除了这一视觉缺陷。
+
+When developing a React-based real-time chat application, we encountered a common but frustrating issue: as users moved their mouse between messages, the message bubbles and code blocks would noticeably jitter, affecting the user experience. This article shares how we diagnosed this problem and implemented performance optimizations to eliminate this visual defect.
+
+## 问题分析
+
+## Problem Analysis
+
+我们的聊天应用使用了以下关键组件：
+
+Our chat application used these key components:
+
+1. `MessageItem` - 渲染单条消息，包括文本、代码和图片
+   - Renders individual messages, including text, code, and images
+2. `MarkdownContent` - 解析和渲染消息内容中的 Markdown 格式
+   - Parses and renders Markdown format in message content
+3. `CodeBlock` - 处理代码块的语法高亮和复制功能
+   - Handles syntax highlighting and copy functionality for code blocks
+
+通过检查代码和细致地观察 UI 行为，我们发现了几个导致抖动的主要原因：
+
+By examining the code and carefully observing UI behavior, we identified several main causes of the jitter:
+
+### 1. 条件渲染导致的布局变化
+
+### 1. Layout Changes from Conditional Rendering
+
+消息组件在鼠标悬停状态改变时会显示或隐藏时间戳：
+
+The message component would show or hide timestamps when hover state changed:
+
+```tsx
+<div
+  className={`text-tiny mt-1 text-gray-500 transition-opacity dark:text-gray-400 ${
+    isHovered ? 'opacity-100' : 'opacity-0 md:group-hover:opacity-70'
+  }`}
+>
+  {formatTime(message.timestamp)}
+</div>
+```
+
+虽然时间戳是通过调整透明度而非完全移除，但它仍然会导致布局计算的微小波动。
+
+Although the timestamp was adjusted via opacity rather than being completely removed, it still caused subtle fluctuations in layout calculations.
+
+### 2. 响应式宽度和布局抖动
+
+### 2. Responsive Widths and Layout Jitter
+
+消息气泡使用百分比宽度，当容器大小有微小变化时会导致重新计算：
+
+Message bubbles used percentage widths, causing recalculations when container sizes changed slightly:
+
+```tsx
+<div className={`max-w-[75%] sm:max-w-[60%] md:max-w-[50%]`}>
+```
+
+### 3. 不必要的重新渲染
+
+### 3. Unnecessary Re-renders
+
+我们的组件在状态变化时会完全重新渲染，例如当复制按钮从"Copy"变为"Copied"时。
+
+Our components would completely re-render when states changed, such as when the copy button changed from "Copy" to "Copied".
+
+## 优化方案
+
+## Optimization Strategy
+
+我们实施了以下优化策略，在不修改任何现有样式的前提下解决了抖动问题：
+
+We implemented the following optimization strategies to solve the jitter issue without modifying any existing styles:
+
+### 1. 固定高度容器
+
+### 1. Fixed Height Containers
+
+为包含可变内容的元素添加固定高度，确保即使内容改变也不会影响整体布局：
+
+Add fixed heights to elements containing variable content, ensuring overall layout remains stable even when content changes:
+
+```tsx
+// 优化前 | Before optimization
+<div className={`text-tiny mt-1 ... ${isHovered ? "opacity-100" : "opacity-0"}`}>
+  {formatTime(message.timestamp)}
+</div>
+
+// 优化后 | After optimization
+<div className={`text-tiny mt-1 ... h-4 ${isHovered ? "opacity-100" : "opacity-0"}`}
+     aria-hidden={!isHovered}>
+  {formatTime(message.timestamp)}
+</div>
+```
+
+增加了固定高度 `h-4` 并添加了 `aria-hidden` 属性以提高可访问性。
+
+Added a fixed height `h-4` and an `aria-hidden` attribute to improve accessibility.
+
+### 2. 组件记忆化
+
+### 2. Component Memoization
+
+使用 React.memo 避免不必要的重新渲染：
+
+Use React.memo to avoid unnecessary re-renders:
+
+```tsx
+// 优化前 | Before optimization
+const CodeBlock: React.FC<CodeBlockProps> = ({ className, children }) => {
+  // 组件实现 | Component implementation
+}
+
+// 优化后 | After optimization
+const CodeBlock = memo<CodeBlockProps>(({ className, children }) => {
+  // 组件实现 | Component implementation
+})
+
+CodeBlock.displayName = 'CodeBlock'
+```
+
+对于复杂的组件，如 `MarkdownContent` 和 `CodeBlock`，使用 `memo` 可以显著减少渲染次数。
+
+For complex components like `MarkdownContent` and `CodeBlock`, using `memo` can significantly reduce render counts.
+
+### 3. 内容缓存与引用稳定性
+
+### 3. Content Caching and Reference Stability
+
+使用 `useRef` 缓存处理过的内容，避免重复计算：
+
+Use `useRef` to cache processed content, avoiding repeated calculations:
+
+```tsx
+const contentRef = useRef(content)
+const processedRef = useRef<string | null>(null)
+
+// 只有当content发生变化时才重新处理
+// Only reprocess when content changes
+if (content !== contentRef.current || processedRef.current === null) {
+  contentRef.current = content
+  // 1. 预处理 | Preprocessing
+  let processed = preprocessMarkdown(content)
+  // 2. 数学公式解析 | Math formula parsing
+  processed = parseMath(processed)
+  processedRef.current = processed
+}
+```
+
+### 4. 优化复制按钮的状态管理
+
+### 4. Optimizing Copy Button State Management
+
+使用 ref 跟踪 timeout，减少状态更新导致的重新渲染：
+
+Use refs to track timeouts, reducing re-renders caused by state updates:
+
+```tsx
+const [copied, setCopied] = useState(false)
+const copyTimeoutRef = useRef<number | null>(null)
+
+const handleCopyCode = () => {
+  navigator.clipboard.writeText(code).then(() => {
+    setCopied(true)
+    // 清除之前的timeout | Clear previous timeout
+    if (copyTimeoutRef.current) {
+      window.clearTimeout(copyTimeoutRef.current)
+    }
+    // 设置新的timeout | Set new timeout
+    copyTimeoutRef.current = window.setTimeout(() => {
+      setCopied(false)
+      copyTimeoutRef.current = null
+    }, 2000)
+  })
+}
+
+// 清理timeout | Cleanup timeout
+useEffect(() => {
+  return () => {
+    if (copyTimeoutRef.current) {
+      window.clearTimeout(copyTimeoutRef.current)
+    }
+  }
+}, [])
+```
+
+### 5. 为复制按钮添加固定宽度
+
+### 5. Adding Fixed Width to Copy Buttons
+
+确保按钮在文本变化时不会改变宽度：
+
+Ensure buttons don't change width when text changes:
+
+```tsx
+<button
+  className="flex min-w-[52px] items-center gap-1 rounded px-1.5 py-0.5 text-xs transition-colors hover:bg-gray-200"
+  onClick={handleCopyCode}
+  type="button"
+>
+  {/* 按钮内容 | Button content */}
+</button>
+```
+
+添加 `min-w-[52px]` 确保按钮宽度稳定。
+
+Adding `min-w-[52px]` ensures stable button width.
+
+## 修复 Markdown 引用问题
+
+## Fixing Markdown Quote Block Issues
+
+除了解决抖动问题，我们还发现并修复了 Markdown 解析器对引用块的处理问题。解析器会将引用标记 `>` 后的所有行都视为引用的一部分，我们通过添加预处理函数解决了这个问题：
+
+Besides solving the jitter issue, we discovered and fixed a problem with how the Markdown parser handled quote blocks. The parser treated all lines after a quote mark `>` as part of the quote. We solved this by adding a preprocessing function:
+
+```typescript
+const fixQuoteBlocks = (content: string): string => {
+  const lines = content.split('\n')
+  const result: string[] = []
+
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]
+
+    // 检测是否以 > 开头（考虑前导空格）
+    // Detect if line starts with > (considering leading spaces)
+    if (/^\s*>\s*/.test(line)) {
+      // 添加当前引用行 | Add current quote line
+      result.push(line)
+
+      // 检查下一行是否也是引用
+      // Check if next line is also a quote
+      if (i + 1 < lines.length && !/^\s*>\s*/.test(lines[i + 1]) && lines[i + 1].trim() !== '') {
+        // 下一行不是引用且不是空行，添加空行以结束引用块
+        // Next line is not a quote and not empty, add empty line to end quote block
+        result.push('')
+      }
+    } else {
+      // 非引用行直接添加 | Add non-quote line directly
+      result.push(line)
+    }
+    i++
+  }
+
+  return result.join('\n')
+}
+```
+
+## 结果与收获
+
+## Results and Lessons Learned
+
+通过实施这些优化，我们成功解决了消息气泡和代码块的抖动问题，显著提升了用户体验。从这个过程中，我们学到了以下关键经验：
+
+By implementing these optimizations, we successfully resolved the jitter issue with message bubbles and code blocks, significantly improving the user experience. From this process, we learned these key lessons:
+
+1. **布局稳定性至关重要**：即使是微小的布局变化也会导致明显的视觉抖动。使用固定尺寸和稳定的定位策略可以防止这种问题。
+
+   **Layout stability is crucial**: Even tiny layout changes can cause noticeable visual jitter. Using fixed dimensions and stable positioning strategies can prevent this.
+
+2. **合理使用 React 性能优化工具**：`React.memo`、`useRef` 和其他记忆化技术能够显著减少不必要的重新渲染。
+
+   **Use React performance optimization tools wisely**: `React.memo`, `useRef`, and other memoization techniques can significantly reduce unnecessary re-renders.
+
+3. **预处理内容数据**：对复杂数据进行预处理和缓存可以避免重复运算，特别是对于 Markdown 这样需要解析的内容。
+
+   **Preprocess content data**: Preprocessing and caching complex data can avoid repeated computations, especially for content requiring parsing like Markdown.
+
+4. **考虑细节和边缘情况**：像 Markdown 引用块这样的边缘情况可能会导致意外的 UI 行为，需要仔细处理。
+
+   **Consider details and edge cases**: Edge cases like Markdown quote blocks can cause unexpected UI behaviors and require careful handling.
+
+这些优化不仅提高了我们应用的性能，还增强了用户体验，使界面更加流畅和专业。通过这些微小但有效的改进，我们能够构建出反应迅速、视觉稳定的前端应用。
+
+These optimizations not only improved our application's performance but also enhanced the user experience, making the interface smoother and more professional. Through these small but effective improvements, we were able to build a responsive, visually stable frontend application.
+
+## 适用场景
+
+## Applicable Scenarios
+
+这些优化技术适用于:
+
+These optimization techniques apply to:
+
+- 实时聊天或消息应用
+  - Real-time chat or messaging applications
+- 具有复杂交互元素的内容展示系统
+  - Content display systems with complex interactive elements
+- 需要处理动态内容且要求视觉稳定性的界面
+  - Interfaces that handle dynamic content and require visual stability
+- 使用 Markdown 或其他富文本格式的应用
+  - Applications using Markdown or other rich text formats
+
+通过关注这些细节，我们能够创造出流畅、专业的用户体验，让用户在使用应用时感到舒适和愉悦。
+
+By focusing on these details, we can create smooth, professional user experiences that make users feel comfortable and delighted when using our applications.
