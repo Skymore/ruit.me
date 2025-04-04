@@ -1,0 +1,830 @@
+---
+title: 'MOCKI – AI-Powered Mock Interview Platform / MOCKI – AI 驱动的模拟面试平台'
+date: '2025-04-04'
+tags: ['MOCKI', 'RAG', 'Agent', 'LLM']
+summary: 'MOCKI – AI-Powered Mock Interview Platform / MOCKI – AI 驱动的模拟面试平台'
+images: ['/static/images/mocki.png']
+authors: ['default']
+---
+
+# MOCKI – AI-Powered Mock Interview Platform
+
+**Tech Stack**: React + FastAPI + MongoDB + OpenAI + Qdrant + Redis + Celery + WebRTC + Firebase Auth + Resend
+
+## System Architecture
+
+```mermaid
+graph TD
+    User[User] --> Frontend[Frontend React]
+    Frontend --> WebRTC[WebRTC Audio/Video]
+    Frontend --> Websocket[Websocket Real-time Communication]
+    Frontend <--> FirebaseAuth[Firebase Auth Authentication]
+
+    Websocket <--> NodeBackend[NestJS Backend]
+    NodeBackend <--> RedisPS[Redis Pub/Sub]
+    NodeBackend <--> PythonBackend[Python Backend]
+
+    NodeBackend --> STT[Speech to Text STT]
+    NodeBackend --> TTS[Text to Speech TTS]
+    NodeBackend --> TranslationAPI[Translation API]
+
+    PythonBackend --> OpenAI[OpenAI API]
+    PythonBackend --> Qdrant[Qdrant Vector Database]
+    PythonBackend --> MongoDB[MongoDB]
+    PythonBackend --> Redis[Redis Cache]
+    PythonBackend --> CeleryWorkers[Celery Workers]
+
+    CeleryWorkers --> Flower[Flower Monitoring]
+    Flower --> Prometheus[Prometheus]
+    Prometheus --> Grafana[Grafana Visualization]
+
+    PythonBackend --> Gmail[Gmail API]
+    PythonBackend --> Resend[Resend Email Service]
+
+    subgraph Security System
+    RateLimiter[Redis Rate Limiter]
+    BloomFilter[Bloom Filter]
+    Vault[HashiCorp Vault]
+    end
+
+    PythonBackend --> Security System
+```
+
+## 🌟 Core Features & System Modules
+
+### 1. AI-Powered Mock Interview Platform (Core Product Capability)
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant NestJS
+    participant PythonBackend
+    participant OpenAI
+    participant CacheSystem
+
+    User->>Frontend: Initiate Interview Request
+    Frontend->>NestJS: WebRTC Audio/Video Connection
+    Frontend->>NestJS: Websocket Connection
+    NestJS->>PythonBackend: Establish Websocket Connection
+
+    loop Interview Process
+        User->>Frontend: Audio Input
+        Frontend->>NestJS: Audio Stream
+        NestJS->>NestJS: STT Conversion
+        NestJS->>PythonBackend: Text Question
+
+        PythonBackend->>CacheSystem: Check Question Cache
+        alt Cache Hit
+            CacheSystem-->>PythonBackend: Return Cached Result
+        else Cache Miss
+            PythonBackend->>OpenAI: LLM Inference Request
+            OpenAI-->>PythonBackend: Return Answer
+            PythonBackend->>CacheSystem: Update Cache
+        end
+
+        PythonBackend->>NestJS: Return AI Answer
+        NestJS->>NestJS: TTS Conversion
+        NestJS->>Frontend: Audio Answer
+        Frontend->>User: Play AI Answer
+    end
+
+    User->>Frontend: End Interview
+    Frontend->>NestJS: Close Connection
+    NestJS->>PythonBackend: Save Interview Record
+```
+
+- Independently developed complete pipeline: audio-video interview process based on WebRTC → STT → LLM inference → TTS audio return, supporting seamless switching between AI and human interviewers
+- Built real-time communication system based on Socket.IO + Redis Pub/Sub + Redis Adapter, supporting message synchronization and state broadcasting in multi-client, multi-instance deployments
+- Supports role switching (system, AI, human), question bank management, resume import, and position-specific Q&A, building structured and unstructured question combinations
+- System Architecture:
+  - NestJS Backend: Handles audio-video calls and conversation records, HTTP calls to translation and TTS APIs, streaming STT (Baidu, Google, iFlytek), maintains WebSocket connections with frontend and Python backend
+  - Python Backend: Handles AI requests, RAG system, email analysis system, user login management, rate limiting. Connects with NodeJS via WebSocket in AI interview system, and interacts with frontend via REST API for login and email analysis
+
+### 2. Intelligent Email Analysis System (AI Information Extraction + Auto-closing)
+
+```mermaid
+graph TD
+    Start[User Authorization] --> OAuth[Gmail OAuth2.0 Authentication]
+    OAuth --> FetchEmails[Fetch Application Emails]
+    FetchEmails --> Filter[Filter by Labels/Time]
+
+    Filter --> ParallelProcessing[Parallel Async Processing]
+    ParallelProcessing --> CeleryTasks[Celery Task Distribution]
+
+    CeleryTasks --> AnalyzeEmail1[Analyze Email 1]
+    CeleryTasks --> AnalyzeEmail2[Analyze Email 2]
+    CeleryTasks --> AnalyzeEmailN[Analyze Email N...]
+
+    AnalyzeEmail1 --> LLMProcessing[LLM Information Extraction]
+    AnalyzeEmail2 --> LLMProcessing
+    AnalyzeEmailN --> LLMProcessing
+
+    LLMProcessing --> ExtractStatus[Extract Application Status]
+
+    ExtractStatus --> CreateTimeline[Generate Timeline]
+    CreateTimeline --> GenerateTasks[Generate Tasks]
+    CreateTimeline --> JobRecommendation[Job Recommendations]
+
+    GenerateTasks --> Notification[Send Notifications]
+    JobRecommendation --> Notification
+```
+
+- Supports user login via Gmail OAuth2.0, uses Gmail API to fetch application emails, filters historical emails by labels/time
+- Uses parallel async LLM to analyze email content, extracts application status (read, replied, interview invitation), position name, company info, and aggregates into Timeline
+- Integrates company position information to push job recommendations to users
+
+### 3. Todo Management & Smart Reminder System
+
+- Automatically generates todos based on email analysis and user behavior, "TODO" "DONE", building complete application tracking path
+- Uses Resend to implement time-triggered deadline reminders, real-time notifications, and status change pushes, avoiding key information omissions
+- Supports status synchronization and cross-device access, user operations instantly feedback to database
+
+### 4. RAG System & Contextual Q&A Optimization
+
+```mermaid
+graph TD
+    subgraph Index Construction
+    Resume[User Resume] --> TextExtractor[Text Extraction]
+    JobDesc[Job Description] --> TextExtractor
+    TextExtractor --> Chunker[Text Chunking]
+
+    Chunker --> QAPairCreator[Query-Answer Pair Generation]
+    QAPairCreator --> QueryEmbedder[Query Embedding Generation]
+    QAPairCreator --> AnswerEmbedder[Answer Embedding Generation]
+
+    QueryEmbedder --> VectorStore[Qdrant Vector Storage]
+    AnswerEmbedder --> VectorStore
+    QAPairCreator --> MetadataStore[MongoDB Metadata]
+    end
+
+    subgraph Retrieval Process
+    Query[User Question] --> InputEmbedder[Query Embedding Generation]
+
+    InputEmbedder --> QuerySimilarity[Query Similarity Search]
+    InputEmbedder --> AnswerSimilarity[Answer Similarity Search]
+
+    QuerySimilarity --> Qdrant[(Qdrant\nVector Database)]
+    AnswerSimilarity --> Qdrant
+
+    QuerySimilarity --> WeightedMerger[Weighted Result Merging]
+    AnswerSimilarity --> WeightedMerger
+    WeightedMerger --> DocumentIDs[Return Similar Document IDs]
+
+    DocumentIDs --> MongoDB[(MongoDB\nMetadata Storage)]
+    MongoDB --> RetrievedDocs[Retrieve Complete Documents]
+    end
+
+    subgraph Context Management
+    RetrievedDocs --> ContextFormatter[Context Formatting]
+    ContextFormatter --> TokenCounter[Token Counter]
+
+    PreviousQA[Previous Q&A] --> SummaryBuffer[Summary Buffer]
+    SummaryBuffer --> TokenThreshold[Token Threshold Control]
+    TokenThreshold --> ContextTruncation[Context Truncation]
+    end
+
+    subgraph Multi-Agent Routing
+    Query --> IntentClassifier[Intent Classifier]
+    IntentClassifier --> MemoryRouter[Memory Router]
+    MemoryRouter --> BQAgent[BQ Interview Agent]
+    MemoryRouter --> CodeAgent[Coding Interview Agent]
+    MemoryRouter --> KnowledgeAgent[Basic Knowledge Agent]
+    MemoryRouter --> AnalysisAgent[Interview Analysis Agent]
+    MemoryRouter --> QuestionAgent[Question Agent]
+    end
+
+    ContextFormatter --> LLMPrompt[LLM Prompt Construction]
+    ContextTruncation --> LLMPrompt
+    MemoryRouter --> LLMPrompt
+    LLMPrompt --> OpenAI[OpenAI API]
+    OpenAI --> Response[Generate Response]
+```
+
+- Vector search engine based on LangChain + Qdrant, supporting Query-Answer vector similarity search
+- Efficient retrieval process: user questions are vectorized and simultaneously compared with pre-processed Query and Answer vectors for similarity calculation, with weighted merging of results to obtain the most relevant content
+- Optimized document processing: interview materials are pre-processed into Query-Answer pairs, with separate embedding calculations, enabling retrieval to consider both question similarity and answer relevance
+- Simplified index structure: direct vector similarity sorting for retrieval, avoiding complex index algorithm tuning while meeting performance requirements at current data scale
+- Multi-turn Q&A using ConversationSummaryBufferMemory for summary caching, combined with Token threshold controller for automatic context truncation, reducing overall Token cost by 45%
+- Intent classification using LangChain LLMChain, driving MemoryRouter for dynamic context switching between multiple Agents
+- Professional Agent system includes:
+  - BQ Interview Agent: handling behavioral questions and soft skills assessment
+  - Coding Interview Agent: evaluating programming ability and algorithm analysis
+  - Basic Knowledge Agent: testing professional domain knowledge
+  - Interview Analysis Agent: providing interview performance evaluation and feedback
+  - Question Agent: generating in-depth questions based on candidate background
+
+### 5. Asynchronous Task System (Performance Guarantee)
+
+```mermaid
+graph LR
+    subgraph Task Generation
+    WebRequest[Web Request] --> TaskRouter
+    ScheduledJob[Scheduled Job] --> TaskRouter
+    EmailAnalysis[Email Analysis] --> TaskRouter
+    end
+
+    subgraph Task Routing
+    TaskRouter[Task Router] --> PriorityQueue
+    TaskRouter --> UserPriority{User Priority}
+    UserPriority -->|VIP User| HighPriority[High Priority Queue]
+    UserPriority -->|Regular User| NormalPriority[Normal Priority Queue]
+    end
+
+    subgraph Queue System
+    PriorityQueue[Priority Queue] --> Redis[(Redis)]
+    HighPriority --> Redis
+    NormalPriority --> Redis
+    end
+
+    subgraph Worker Pool
+    Redis --> Dispatcher[Task Dispatcher]
+    Dispatcher --> CPUWorkers[CPU-intensive Workers\nPDF/Email Parsing]
+    Dispatcher --> IOWorkers[IO-intensive Workers\nLLM Calls/Embedding Generation]
+    end
+
+    subgraph Monitoring System
+    CPUWorkers --> Flower[Flower Monitoring]
+    IOWorkers --> Flower
+    Flower --> Prometheus[Prometheus]
+    Prometheus --> Grafana[Grafana]
+    Grafana --> Alerts[Alert Notifications]
+    end
+```
+
+- Multi-machine multi-queue task scheduling system based on Celery + Redis, with Worker pool independently deployed for CPU-intensive (PDF/email parsing) and IO-intensive (LLM calls, embedding generation) tasks
+- Priority task scheduling (e.g., VIP user request queue jumping), reducing urgent task average latency by 60%
+- Real-time monitoring with Flower, combined with Prometheus/Grafana for automatic alerts and visual tracking of task failure rates and queue backlog metrics
+
+#### Flower Monitoring Tool Details
+
+Flower is Celery's officially recommended task monitoring tool, suitable for **real-time monitoring of Celery task execution, Worker status, task queue backlog, etc.**. It can be understood as Celery's visual Dashboard + API server.
+
+**Flower Features:**
+
+- 👨‍🔧 Worker status (active, stopped, heartbeat lost)
+- 📦 Queue length (backlog status)
+- ✅ Task execution status (success, failure, retry, duration)
+- 🧩 Task details (input parameters, return results, exception stack)
+- 📈 Real-time task throughput, failure rate charts
+
+**Start Flower:**
+
+```bash
+celery -A your_app flower --port=5555
+```
+
+**Alert Implementation with Prometheus + Grafana:**
+
+1. Use `celery-exporter` to expose Celery data as Prometheus metrics
+2. Configure Prometheus rules (e.g., task failures > threshold)
+3. Set trigger conditions in Grafana (e.g., failure rate > 10% within 5 minutes) for alerts (email/Slack/Feishu/Webhook)
+
+### 6. Multi-dimensional Rate Limiting & Security Protection
+
+```mermaid
+graph TD
+    Request[API Request] --> SecurityLayer[Security Layer]
+
+    subgraph Rate Limiting System
+    SecurityLayer --> RateLimiter[Rate Limiter]
+    RateLimiter --> UserLevel[User-level Rate Limit\n10/min]
+    RateLimiter --> IPLevel[IP-level Rate Limit\n50/min]
+    RateLimiter --> GlobalLevel[Global OpenAI Call Limit\n500/min]
+    end
+
+    subgraph Replay Attack Prevention
+    SecurityLayer --> RequestFingerprint[Request Fingerprint Generation]
+    RequestFingerprint --> BloomFilter[Bloom Filter]
+    BloomFilter --> Cache[(Redis Cache)]
+    BloomFilter --> CheckDuplicate{Duplicate?}
+    CheckDuplicate -->|Yes| Reject[Reject Request]
+    CheckDuplicate -->|No| Accept[Accept Request]
+    end
+
+    subgraph Data Security
+    UserData[User Sensitive Data] --> ClientEncryption[Client-side AES-256 Encryption]
+    ClientEncryption --> SecureTransmission[Encrypted Transmission]
+    SecureTransmission --> ServerStorage[Server Stores Only Ciphertext]
+    KeyManagement[Key Management] --> Vault[(HashiCorp Vault)]
+    end
+```
+
+- User-level (10/min), IP-level (50/min), and global OpenAI call-level (500/min) rate limiting system built with Redis sliding window algorithm, intercepting 98% of high-frequency abuse requests
+- Combined with Redis Bloom filter to cache processed request fingerprints, preventing duplicate submissions or replay attacks, with false positive rate < 0.1%
+
+### 7. Multi-level Cache & High-frequency Interface Performance Optimization
+
+```mermaid
+graph TD
+    Request[API Request] --> CacheRouter[Cache Router]
+
+    subgraph Level 1 Cache
+    CacheRouter --> RedisCache[Redis Cache]
+    RedisCache --> L1Hit{Hit?}
+    L1Hit -->|Yes| L1Return[Return Result]
+    L1Hit -->|No| L2Cache
+
+    RedisData1[High-frequency User Data] --> RedisCache
+    RedisData2[Recent Interview Summaries] --> RedisCache
+    RedisData3[Popular Question Embeddings] --> RedisCache
+    end
+
+    subgraph Level 2 Cache
+    L2Cache[MongoDB Query Cache] --> L2Hit{Hit?}
+    L2Hit -->|Yes| L2Return[Return Result]
+    L2Hit -->|No| DatabaseQuery
+    end
+
+    subgraph Database Query
+    DatabaseQuery[Execute MongoDB Query] --> StoreInCache
+    StoreInCache[Store in Cache] --> L1Update[Update Redis Cache]
+    StoreInCache --> L2Update[Update Query Cache]
+    end
+
+    subgraph Cache Strategy
+    CachePolicy[Cache Policy] --> LRU[LRU Eviction Strategy]
+    CachePolicy --> TTL[TTL Expiration Strategy]
+    LRU --> EvictOldData[Evict Old Data]
+    TTL --> AutoExpire[Auto Expire]
+    end
+```
+
+- High-frequency data (e.g., user's last 3 interview summaries) using Redis cache with JSON serialization storage, reducing query latency from MongoDB's 15ms to 1ms
+- Pre-generated and cached high-frequency interview question embeddings, reducing OpenAI API call volume by 35%
+- Lightweight MongoDB query cache layer with LRU + TTL strategy for automatic old data eviction, reducing high-frequency query (e.g., user/position information) latency from 15ms to 1ms, increasing overall QPS by 4x
+
+### 8. User Authentication & Data Security
+
+- 前端集成 Firebase Auth 实现身份认证，后端结合 JWT 管理权限与登录态
+- 敏感数据（如用户简历）使用客户端 AES-256 加密传输，服务端仅存储密文，密钥托管在 HashiCorp Vault
+
+## Performance Metrics & Optimization Results
+
+```mermaid
+graph LR
+    subgraph Cache Performance Improvement
+    MongoDB[MongoDB Query\n15ms] --> |After Optimization| RedisCache[Redis Cache\n1ms]
+    APITokens[OpenAI API\nCall Volume] --> |After Optimization| APITokensReduced[OpenAI API\nCall Volume Reduced 35%]
+    QPS[System QPS] --> |After Optimization| QPSIncreased[System QPS\nIncreased 4x]
+    end
+
+    subgraph Task Processing Optimization
+    TaskDelay[Urgent Task Delay] --> |After Optimization| TaskDelayReduced[Urgent Task Delay\nReduced 60%]
+    TokenCost[Token Cost] --> |After Optimization| TokenCostReduced[Token Cost\nReduced 45%]
+    end
+
+    subgraph Security Performance
+    AbuseRequests[Abuse Requests] --> |Block Rate| BlockRate[Block 98%]
+    FalsePositive[Bloom Filter\nFalse Positive Rate] --> FalsePositiveRate[<0.1%]
+    end
+
+    subgraph Retrieval Accuracy
+    SearchAccuracy[Top-3 Retrieval\nResult Accuracy] --> AccuracyRate[92%]
+    end
+```
+
+## Technical Highlights
+
+1. **Real-time Audio-Video System**
+
+   - Low-latency interview system built with WebRTC + Socket.IO + Redis Pub/Sub, supporting seamless switching between AI and human interviewers
+
+2. **High-performance RAG Architecture**
+
+   - Vector search engine based on LangChain + Qdrant, supporting Query-Answer vector similarity search
+
+3. **Multi-level Cache Design**
+
+   - Multi-level architecture with Redis + MongoDB query cache, reducing key query latency from 15ms to 1ms, increasing system QPS by 4x
+
+4. **Asynchronous Task Optimization**
+
+   - CPU/IO separation deployment strategy based on Celery, with priority scheduling, reducing urgent task latency by 60%
+
+5. **Efficient Token Management**
+
+   - Reducing overall token cost by 45% through summary caching and context truncation
+
+6. **Comprehensive Security Protection**
+
+   - Multi-dimensional rate limiting + Bloom filter + end-to-end encryption, blocking 98% of abuse requests with &lt;0.1% false positive rate
+
+7. **Multi-Agent Routing System**
+
+   - Context-aware dynamic routing based on intent classification, supporting switching between specialized domain agents
+
+8. **Intelligent Email Analysis**
+   - Gmail API integration + parallel async LLM processing + semantic extraction, building an intelligent tracking system for the entire application lifecycle
+
+---
+
+# MOCKI – AI 驱动的模拟面试平台
+
+**技术栈**：React + FastAPI + MongoDB + OpenAI + Qdrant + Redis + Celery + WebRTC + Firebase Auth + Resend
+
+## 系统架构
+
+```mermaid
+graph TD
+    User[用户] --> Frontend[前端 React]
+    Frontend --> WebRTC[WebRTC 音视频]
+    Frontend --> Websocket[Websocket 实时通信]
+    Frontend <--> FirebaseAuth[Firebase Auth 认证]
+
+    Websocket <--> NodeBackend[NestJS 后端]
+    NodeBackend <--> RedisPS[Redis Pub/Sub]
+    NodeBackend <--> PythonBackend[Python 后端]
+
+    NodeBackend --> STT[语音转文本 STT]
+    NodeBackend --> TTS[文本转语音 TTS]
+    NodeBackend --> TranslationAPI[翻译 API]
+
+    PythonBackend --> OpenAI[OpenAI API]
+    PythonBackend --> Qdrant[Qdrant 向量数据库]
+    PythonBackend --> MongoDB[MongoDB]
+    PythonBackend --> Redis[Redis 缓存]
+    PythonBackend --> CeleryWorkers[Celery Workers]
+
+    CeleryWorkers --> Flower[Flower 监控]
+    Flower --> Prometheus[Prometheus]
+    Prometheus --> Grafana[Grafana 可视化]
+
+    PythonBackend --> Gmail[Gmail API]
+    PythonBackend --> Resend[Resend 邮件服务]
+
+    subgraph 安全系统
+    RateLimiter[Redis 限流器]
+    BloomFilter[布隆过滤器]
+    Vault[HashiCorp Vault]
+    end
+
+    PythonBackend --> 安全系统
+```
+
+## 🌟 核心功能与系统模块
+
+### 1. AI 驱动的模拟面试平台（核心产品能力）
+
+```mermaid
+sequenceDiagram
+    participant 用户
+    participant 前端
+    participant NestJS
+    participant Python后端
+    participant OpenAI
+    participant 缓存系统
+
+    用户->>前端: 发起面试请求
+    前端->>NestJS: WebRTC音视频连接
+    前端->>NestJS: Websocket连接
+    NestJS->>Python后端: 建立Websocket连接
+
+    loop 面试过程
+        用户->>前端: 音频输入
+        前端->>NestJS: 音频流
+        NestJS->>NestJS: STT转换
+        NestJS->>Python后端: 文本问题
+
+        Python后端->>缓存系统: 检查问题缓存
+        alt 缓存命中
+            缓存系统-->>Python后端: 返回缓存结果
+        else 缓存未命中
+            Python后端->>OpenAI: LLM推理请求
+            OpenAI-->>Python后端: 返回回答
+            Python后端->>缓存系统: 更新缓存
+        end
+
+        Python后端->>NestJS: 返回AI回答
+        NestJS->>NestJS: TTS转换
+        NestJS->>前端: 音频回答
+        前端->>用户: 播放AI回答
+    end
+
+    用户->>前端: 结束面试
+    前端->>NestJS: 关闭连接
+    NestJS->>Python后端: 保存面试记录
+```
+
+- 独立开发完整链路：音视频面试流程基于 WebRTC → STT → LLM 推理 → TTS 返回音频，支持 AI 面试官与真人面试官自由切换
+- 构建基于 Socket.IO + Redis Pub/Sub + Redis Adapter 的实时通信系统，支持多客户端、多实例部署下的消息同步与状态广播
+- 支持角色切换（系统、AI、真人）、问题库管理、简历导入与职位定向问答，构建结构化与非结构化问题组合
+- 系统架构：
+  - NestJS后端：负责连接音视频通话和对话记录，HTTP调用翻译API和TTS API，流式STT（百度、谷歌、讯飞），维持与前端的websocket连接，同时与Python后端保持websocket连接
+  - Python后端：处理AI请求，RAG系统，邮件分析系统，管理用户登录，实现限流。在AI面试系统中与nodejs通过websocket连接，在登录、邮件分析系统与前端通过REST API交互
+
+### 2. 邮件智能分析系统（AI 信息抽取 + 自动闭环）
+
+```mermaid
+graph TD
+    Start[用户授权] --> OAuth[Gmail OAuth2.0认证]
+    OAuth --> FetchEmails[拉取投递邮件]
+    FetchEmails --> Filter[按标签/时间过滤]
+
+    Filter --> ParallelProcessing[并行异步处理]
+    ParallelProcessing --> CeleryTasks[Celery任务分配]
+
+    CeleryTasks --> AnalyzeEmail1[分析邮件1]
+    CeleryTasks --> AnalyzeEmail2[分析邮件2]
+    CeleryTasks --> AnalyzeEmailN[分析邮件N...]
+
+    AnalyzeEmail1 --> LLMProcessing[LLM信息提取]
+    AnalyzeEmail2 --> LLMProcessing
+    AnalyzeEmailN --> LLMProcessing
+
+    LLMProcessing --> ExtractStatus[提取申请状态]
+
+    ExtractStatus --> CreateTimeline[生成时间线]
+    CreateTimeline --> GenerateTasks[生成待办事项]
+    CreateTimeline --> JobRecommendation[职位推荐]
+
+    GenerateTasks --> Notification[发送通知]
+    JobRecommendation --> Notification
+```
+
+- 支持用户通过 OAuth2.0 登录 Gmail，使用 Gmail API 拉取投递邮件，按标签/时间过滤历史邮件
+- 使用并行异步 LLM 分析邮件内容，提取申请状态（如已读、已回复、面试邀请）、职位名称、公司信息等字段，并聚合形成 Timeline
+- 整合公司职位信息，向用户推送职位列表推荐
+
+### 3. 待办事项管理与智能提醒系统
+
+- 自动根据邮件解析与用户行为生成待办事项，"TODO" "DONE"等，构建完整投递跟踪路径
+- 使用 Resend 实现基于时间触发的临期提醒、实时通知与状态变更推送，避免关键信息遗漏
+- 支持状态同步与跨设备访问，用户操作即时反馈至数据库
+
+### 4. RAG 系统与上下文问答能力优化
+
+```mermaid
+graph TD
+    subgraph Index Construction
+    Resume[用户简历] --> TextExtractor[文本提取]
+    JobDesc[职位描述] --> TextExtractor
+    TextExtractor --> Chunker[文本分块]
+
+    Chunker --> QAPairCreator[Query-Answer对生成]
+    QAPairCreator --> QueryEmbedder[Query嵌入生成]
+    QAPairCreator --> AnswerEmbedder[Answer嵌入生成]
+
+    QueryEmbedder --> VectorStore[Qdrant向量存储]
+    AnswerEmbedder --> VectorStore
+    QAPairCreator --> MetadataStore[MongoDB元数据]
+    end
+
+    subgraph Retrieval Process
+    Query[用户问题] --> InputEmbedder[查询嵌入生成]
+
+    InputEmbedder --> QuerySimilarity[Query相似度检索]
+    InputEmbedder --> AnswerSimilarity[Answer相似度检索]
+
+    QuerySimilarity --> Qdrant[(Qdrant\n向量数据库)]
+    AnswerSimilarity --> Qdrant
+
+    QuerySimilarity --> WeightedMerger[加权结果合并]
+    AnswerSimilarity --> WeightedMerger
+    WeightedMerger --> DocumentIDs[返回相似文档ID]
+
+    DocumentIDs --> MongoDB[(MongoDB\n元数据存储)]
+    MongoDB --> RetrievedDocs[检索完整文档]
+    end
+
+    subgraph Context Management
+    RetrievedDocs --> ContextFormatter[上下文格式化]
+    ContextFormatter --> TokenCounter[Token计数器]
+
+    PreviousQA[历史对话] --> SummaryBuffer[摘要缓存]
+    SummaryBuffer --> TokenThreshold[Token阈值控制]
+    TokenThreshold --> ContextTruncation[上下文截断]
+    end
+
+    subgraph Multi-Agent Routing
+    Query --> IntentClassifier[意图分类器]
+    IntentClassifier --> MemoryRouter[记忆路由器]
+    MemoryRouter --> BQAgent[BQ面试Agent]
+    MemoryRouter --> CodeAgent[代码面试Agent]
+    MemoryRouter --> KnowledgeAgent[基础知识Agent]
+    MemoryRouter --> AnalysisAgent[面试分析Agent]
+    MemoryRouter --> QuestionAgent[提问Agent]
+    end
+
+    ContextFormatter --> LLMPrompt[LLM提示构建]
+    ContextTruncation --> LLMPrompt
+    MemoryRouter --> LLMPrompt
+    LLMPrompt --> OpenAI[OpenAI API]
+    OpenAI --> Response[生成响应]
+```
+
+- Vector search engine based on LangChain + Qdrant, supporting Query-Answer vector similarity search
+- Efficient retrieval process: user questions are vectorized and simultaneously compared with pre-processed Query and Answer vectors for similarity calculation, with weighted merging of results to obtain the most relevant content
+- Optimized document processing: interview materials are pre-processed into Query-Answer pairs, with separate embedding calculations, enabling retrieval to consider both question similarity and answer relevance
+- Simplified index structure: direct vector similarity sorting for retrieval, avoiding complex index algorithm tuning while meeting performance requirements at current data scale
+- Multi-turn Q&A using ConversationSummaryBufferMemory for summary caching, combined with Token threshold controller for automatic context truncation, reducing overall Token cost by 45%
+- Intent classification using LangChain LLMChain, driving MemoryRouter for dynamic context switching between multiple Agents
+- Professional Agent system includes:
+  - BQ Interview Agent: handling behavioral questions and soft skills assessment
+  - Coding Interview Agent: evaluating programming ability and algorithm analysis
+  - Basic Knowledge Agent: testing professional domain knowledge
+  - Interview Analysis Agent: providing interview performance evaluation and feedback
+  - Question Agent: generating in-depth questions based on candidate background
+
+### 5. 异步任务系统（性能保障能力）
+
+```mermaid
+graph LR
+    subgraph Task Generation
+    WebRequest[Web Request] --> TaskRouter
+    ScheduledJob[Scheduled Job] --> TaskRouter
+    EmailAnalysis[Email Analysis] --> TaskRouter
+    end
+
+    subgraph Task Routing
+    TaskRouter[Task Router] --> PriorityQueue
+    TaskRouter --> UserPriority{User Priority}
+    UserPriority -->|VIP User| HighPriority[High Priority Queue]
+    UserPriority -->|Regular User| NormalPriority[Normal Priority Queue]
+    end
+
+    subgraph Queue System
+    PriorityQueue[Priority Queue] --> Redis[(Redis)]
+    HighPriority --> Redis
+    NormalPriority --> Redis
+    end
+
+    subgraph Worker Pool
+    Redis --> Dispatcher[Task Dispatcher]
+    Dispatcher --> CPUWorkers[CPU-intensive Workers\nPDF/Email Parsing]
+    Dispatcher --> IOWorkers[IO-intensive Workers\nLLM Calls/Embedding Generation]
+    end
+
+    subgraph Monitoring System
+    CPUWorkers --> Flower[Flower Monitoring]
+    IOWorkers --> Flower
+    Flower --> Prometheus[Prometheus]
+    Prometheus --> Grafana[Grafana]
+    Grafana --> Alerts[Alert Notifications]
+    end
+```
+
+- Multi-machine multi-queue task scheduling system based on Celery + Redis, with Worker pool independently deployed for CPU-intensive (PDF/email parsing) and IO-intensive (LLM calls, embedding generation) tasks
+- Priority task scheduling (e.g., VIP user request queue jumping), reducing urgent task average latency by 60%
+- Real-time monitoring with Flower, combined with Prometheus/Grafana for automatic alerts and visual tracking of task failure rates and queue backlog metrics
+
+#### Flower Monitoring Tool Details
+
+Flower is Celery's officially recommended task monitoring tool, suitable for **real-time monitoring of Celery task execution, Worker status, task queue backlog, etc.**. It can be understood as Celery's visual Dashboard + API server.
+
+**Flower Features:**
+
+- 👨‍🔧 Worker status (active, stopped, heartbeat lost)
+- 📦 Queue length (backlog status)
+- ✅ Task execution status (success, failure, retry, duration)
+- 🧩 Task details (input parameters, return results, exception stack)
+- 📈 Real-time task throughput, failure rate charts
+
+**Start Flower:**
+
+```bash
+celery -A your_app flower --port=5555
+```
+
+**Alert Implementation with Prometheus + Grafana:**
+
+1. Use `celery-exporter` to expose Celery data as Prometheus metrics
+2. Configure Prometheus rules (e.g., task failures > threshold)
+3. Set trigger conditions in Grafana (e.g., failure rate > 10% within 5 minutes) for alerts (email/Slack/Feishu/Webhook)
+
+### 6. 多维限流与安全防护机制
+
+```mermaid
+graph TD
+    Request[API Request] --> SecurityLayer[Security Layer]
+
+    subgraph Rate Limiting System
+    SecurityLayer --> RateLimiter[Rate Limiter]
+    RateLimiter --> UserLevel[User-level Rate Limit\n10/min]
+    RateLimiter --> IPLevel[IP-level Rate Limit\n50/min]
+    RateLimiter --> GlobalLevel[Global OpenAI Call Limit\n500/min]
+    end
+
+    subgraph Replay Attack Prevention
+    SecurityLayer --> RequestFingerprint[Request Fingerprint Generation]
+    RequestFingerprint --> BloomFilter[Bloom Filter]
+    BloomFilter --> Cache[(Redis Cache)]
+    BloomFilter --> CheckDuplicate{Duplicate?}
+    CheckDuplicate -->|Yes| Reject[Reject Request]
+    CheckDuplicate -->|No| Accept[Accept Request]
+    end
+
+    subgraph Data Security
+    UserData[User Sensitive Data] --> ClientEncryption[Client-side AES-256 Encryption]
+    ClientEncryption --> SecureTransmission[Encrypted Transmission]
+    SecureTransmission --> ServerStorage[Server Stores Only Ciphertext]
+    KeyManagement[Key Management] --> Vault[(HashiCorp Vault)]
+    end
+```
+
+- User-level (10/min), IP-level (50/min), and global OpenAI call-level (500/min) rate limiting system built with Redis sliding window algorithm, intercepting 98% of high-frequency abuse requests
+- Combined with Redis Bloom filter to cache processed request fingerprints, preventing duplicate submissions or replay attacks, with false positive rate < 0.1%
+
+### 7. 多级缓存与高频接口性能优化
+
+```mermaid
+graph TD
+    Request[API Request] --> CacheRouter[Cache Router]
+
+    subgraph Level 1 Cache
+    CacheRouter --> RedisCache[Redis Cache]
+    RedisCache --> L1Hit{Hit?}
+    L1Hit -->|Yes| L1Return[Return Result]
+    L1Hit -->|No| L2Cache
+
+    RedisData1[High-frequency User Data] --> RedisCache
+    RedisData2[Recent Interview Summaries] --> RedisCache
+    RedisData3[Popular Question Embeddings] --> RedisCache
+    end
+
+    subgraph Level 2 Cache
+    L2Cache[MongoDB Query Cache] --> L2Hit{Hit?}
+    L2Hit -->|Yes| L2Return[Return Result]
+    L2Hit -->|No| DatabaseQuery
+    end
+
+    subgraph Database Query
+    DatabaseQuery[Execute MongoDB Query] --> StoreInCache
+    StoreInCache[Store in Cache] --> L1Update[Update Redis Cache]
+    StoreInCache --> L2Update[Update Query Cache]
+    end
+
+    subgraph Cache Strategy
+    CachePolicy[Cache Policy] --> LRU[LRU Eviction Strategy]
+    CachePolicy --> TTL[TTL Expiration Strategy]
+    LRU --> EvictOldData[Evict Old Data]
+    TTL --> AutoExpire[Auto Expire]
+    end
+```
+
+- High-frequency data (e.g., user's last 3 interview summaries) using Redis cache with JSON serialization storage, reducing query latency from MongoDB's 15ms to 1ms
+- Pre-generated and cached high-frequency interview question embeddings, reducing OpenAI API call volume by 35%
+- Lightweight MongoDB query cache layer with LRU + TTL strategy for automatic old data eviction, reducing high-frequency query (e.g., user/position information) latency from 15ms to 1ms, increasing overall QPS by 4x
+
+### 8. 用户认证与数据安全
+
+- 前端集成 Firebase Auth 实现身份认证，后端结合 JWT 管理权限与登录态
+- 敏感数据（如用户简历）使用客户端 AES-256 加密传输，服务端仅存储密文，密钥托管在 HashiCorp Vault
+
+## 性能指标与优化效果
+
+```mermaid
+graph LR
+    subgraph Cache Performance Improvement
+    MongoDB[MongoDB Query\n15ms] --> |After Optimization| RedisCache[Redis Cache\n1ms]
+    APITokens[OpenAI API\nCall Volume] --> |After Optimization| APITokensReduced[OpenAI API\nCall Volume Reduced 35%]
+    QPS[System QPS] --> |After Optimization| QPSIncreased[System QPS\nIncreased 4x]
+    end
+
+    subgraph Task Processing Optimization
+    TaskDelay[Urgent Task Delay] --> |After Optimization| TaskDelayReduced[Urgent Task Delay\nReduced 60%]
+    TokenCost[Token Cost] --> |After Optimization| TokenCostReduced[Token Cost\nReduced 45%]
+    end
+
+    subgraph Security Performance
+    AbuseRequests[Abuse Requests] --> |Block Rate| BlockRate[Block 98%]
+    FalsePositive[Bloom Filter\nFalse Positive Rate] --> FalsePositiveRate[<0.1%]
+    end
+
+    subgraph Retrieval Accuracy
+    SearchAccuracy[Top-3 Retrieval\nResult Accuracy] --> AccuracyRate[92%]
+    end
+```
+
+## 技术亮点总结
+
+1. **实时音视频交互系统**
+
+   - WebRTC + Socket.IO + Redis Pub/Sub 构建的低延迟面试系统，支持AI与真人无缝切换
+
+2. **高性能RAG架构**
+
+   - Vector search engine based on LangChain + Qdrant, supporting Query-Answer vector similarity search
+
+3. **多级缓存设计**
+
+   - Redis + MongoDB查询缓存的多级架构，将关键查询延迟从15ms降至1ms，系统QPS提升4倍
+
+4. **异步任务优化**
+
+   - 基于Celery的CPU/IO分离部署策略，结合优先级调度，紧急任务延迟降低60%
+
+5. **高效Token管理**
+
+   - 通过摘要缓存与上下文截断技术，整体Token成本降低45%
+
+6. **全面的安全防护**
+
+   - 多维限流 + 布隆过滤器 + 端到端加密，拦截98%滥用请求，误判率&lt;0.1%
+
+7. **多Agent路由系统**
+
+   - 基于意图分类的上下文动态路由，支持在不同专业领域Agent间切换
+
+8. **邮件智能分析**
+   - Gmail API集成 + 并行异步LLM处理 + 语义提取，构建投递全生命周期的智能跟踪系统
