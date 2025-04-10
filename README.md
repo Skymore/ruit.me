@@ -6,7 +6,7 @@
 
 </div>
 
-![ruit.me @ #250a4c5 on Oct.13](public/static/images/image.png)
+![ruit.me @ #250a4c5 on Oct.13](public/static/images/readme-image.png)
 
 ## Motivation
 
