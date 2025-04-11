@@ -1,0 +1,386 @@
+---
+title: 'Understanding the Word Ladder Problem'
+date: '2025-04-11'
+tags: ['Algorithm', 'BFS', 'Graph', 'LeetCode']
+summary: 'A comprehensive guide to solving the Word Ladder problem with four different approaches, including Bidirectional BFS'
+images: ['/static/images/leetcode/word-ladder.png']
+authors: ['default']
+---
+
+# Understanding the Word Ladder Problem
+
+The **Word Ladder** problem is a classic puzzle frequently posed in coding interviews. It requires transforming one word into another by altering a single character at each step and ensuring every intermediate word exists in a given dictionary (word list).
+
+## Problem Statement
+
+You are given:
+
+1. A **beginWord**.
+2. An **endWord**.
+3. A list of valid words called **wordList**.
+
+You need to find the **shortest transformation sequence** from **beginWord** to **endWord**, where each transformation:
+
+- Changes exactly one character in the current word.
+- Produces a new word that must exist in the wordList.
+
+If no valid transformation sequence exists, you must return **0**.
+
+Formally:
+
+- A transformation sequence from `beginWord` to `endWord` is:
+  ```
+  beginWord -> s1 -> s2 -> ... -> sk  (where sk == endWord)
+  ```
+- Each pair of adjacent words in this sequence differs by exactly one letter.
+- Each intermediate word sᵢ must belong to **wordList**.
+- **beginWord** itself does not have to be in **wordList**.
+- The function returns the **number of steps** in the shortest sequence (i.e., k + 1, because `beginWord` counts as the first step). If no path is found, return **0**.
+
+### Example
+
+```
+beginWord = "hit"
+endWord   = "cog"
+wordList  = ["hot","dot","dog","lot","log","cog"]
+
+Shortest transformation:
+hit -> hot -> dot -> dog -> cog
+
+Answer: 5
+```
+
+---
+
+# Approach Overview
+
+We'll discuss **four** methods in detail:
+
+1. **Pre-Build Adjacency List (Naive)**
+2. **On-the-Fly BFS (No Preprocessing)**
+3. **Wildcard Mapping (More Efficient)**
+4. **Bidirectional BFS (Advanced Optimization)**
+
+---
+
+## Approach 1: Pre-Build the Adjacency List (Naive)
+
+### Method Description
+
+1. Compare **every pair** of words in the dictionary to see if they differ by a single letter.
+2. If they do, record that connection in an adjacency list (a graph structure).
+3. Perform a BFS from `beginWord` until `endWord` is reached.
+
+### Time Complexity
+
+- **Graph construction**: \(O(N^2 \times L)\)
+  - We have \(N\) words and compare each pair, needing \(O(L)\) time for each pair to see if they differ by one letter.
+- **BFS**: \(O(N + E)\), but \(E\) can be up to \(O(N^2)\).
+- Overall can reach \(O(N^2 \times L)\) in practice.
+
+### Code Example
+
+```python
+from collections import defaultdict, deque
+from typing import List
+
+class Solution:
+    def ladderLength(self, beginWord: str, endWord: str, wordList: List[str]) -> int:
+        # If the endWord is not in wordList, no valid sequence
+        if endWord not in wordList:
+            return 0
+
+        # Convert to set and include beginWord if missing
+        wordSet = set(wordList)
+        wordSet.add(beginWord)
+        words = list(wordSet)
+
+        # Helper to check if two words differ by exactly one letter
+        def differ_by_one(w1: str, w2: str) -> bool:
+            diff_count = 0
+            for c1, c2 in zip(w1, w2):
+                if c1 != c2:
+                    diff_count += 1
+                    if diff_count > 1:
+                        return False
+            return diff_count == 1
+
+        # 1) Build the graph (adjacency list) - O(N^2 * L)
+        graph = defaultdict(list)
+        n = len(words)
+        for i in range(n):
+            for j in range(i + 1, n):
+                if differ_by_one(words[i], words[j]):
+                    graph[words[i]].append(words[j])
+                    graph[words[j]].append(words[i])
+
+        # 2) BFS to find the shortest path
+        queue = deque([(beginWord, 1)])
+        visited = set([beginWord])
+
+        while queue:
+            word, steps = queue.popleft()
+            # If we've reached the endWord, return the distance
+            if word == endWord:
+                return steps
+
+            for neighbor in graph[word]:
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append((neighbor, steps + 1))
+
+        return 0
+```
+
+**Pros**: Straightforward to understand.  
+**Cons**: Can be slow when `N` is large.
+
+---
+
+## Approach 2: On-the-Fly BFS (No Preprocessing)
+
+Instead of building an entire adjacency list first, you **directly** do a BFS:
+
+1. Start from `beginWord`.
+2. In each BFS step, compare the current word to every remaining word in your set to find neighbors that differ by one letter.
+3. Enqueue those neighbors and mark them visited.
+
+### Time Complexity
+
+- Each time you dequeue a word, you may compare it with **all** words in the set.
+- In the worst case, \(O(N^2 \times L)\).
+
+### Code Example
+
+```python
+from collections import deque
+from typing import List
+
+class Solution:
+    def ladderLength(self, beginWord: str, endWord: str, wordList: List[str]) -> int:
+        word_set = set(wordList)
+        if endWord not in word_set:
+            return 0
+
+        queue = deque([(beginWord, 1)])
+        visited = set([beginWord])
+
+        def differ_by_one(w1: str, w2: str) -> bool:
+            diff_count = 0
+            for c1, c2 in zip(w1, w2):
+                if c1 != c2:
+                    diff_count += 1
+                    if diff_count > 1:
+                        return False
+            return diff_count == 1
+
+        while queue:
+            word, steps = queue.popleft()
+            if word == endWord:
+                return steps
+
+            # Convert set to list to avoid runtime error
+            for candidate in list(word_set):
+                if differ_by_one(word, candidate):
+                    if candidate == endWord:
+                        return steps + 1
+                    visited.add(candidate)
+                    queue.append((candidate, steps + 1))
+                    # Remove from the set to prevent re-check
+                    word_set.remove(candidate)
+
+        return 0
+```
+
+**Pros**: Minimal code without pre-building a graph.  
+**Cons**: Still \(O(N^2 \times L)\) in worst-case scenarios.
+
+---
+
+## Approach 3: Wildcard Mapping (More Efficient)
+
+To avoid the \(N^2\) blowup, we can:
+
+1. Generate **wildcard patterns** (like `h*t`, `*ot`) for every word in the dictionary.
+2. Store in a hash map: **pattern -> list of words** that match it.
+3. Use BFS. For a given word, to find its neighbors, generate its \(L\) wildcard forms and look them up directly in the hash map.
+
+### Time Complexity (Detailed)
+
+- **Preprocessing**:
+  - For \(N\) words, each of length \(L\), generating \(L\) wildcard strings.
+  - Each generation is \(O(L)\) due to slicing, so \(O(N \times L^2)\) total.
+- **BFS**:
+  - Potentially \(O(N \times L^2)\) again, because each word might generate \(L\) patterns in \(O(L)\).
+- Overall typically \(O(N \times L^2)\), which is far better than \(O(N^2 \times L)\) when \(N\) is large, as long as each pattern doesn't map to a huge number of words.
+
+### Code Example
+
+```python
+from collections import defaultdict, deque
+from typing import List
+
+class Solution:
+    def ladderLength(self, beginWord: str, endWord: str, wordList: List[str]) -> int:
+        word_set = set(wordList)
+        if endWord not in word_set:
+            return 0
+
+        # Preprocess the wordList to build a pattern map
+        pattern_map = defaultdict(list)
+        L = len(beginWord)
+
+        for word in word_set:
+            for i in range(L):
+                pattern = word[:i] + '*' + word[i+1:]
+                pattern_map[pattern].append(word)
+
+        # BFS initialization
+        queue = deque([(beginWord, 1)])
+        visited = set([beginWord])
+
+        while queue:
+            word, steps = queue.popleft()
+
+            for i in range(L):
+                wildcard = word[:i] + '*' + word[i+1:]
+                neighbors = pattern_map[wildcard]
+                for neighbor in neighbors:
+                    if neighbor == endWord:
+                        return steps + 1
+                    if neighbor not in visited:
+                        visited.add(neighbor)
+                        queue.append((neighbor, steps + 1))
+
+                # Clear the list to avoid re-processing the same neighbors in future iterations
+                pattern_map[wildcard] = []
+
+        return 0
+```
+
+**Pros**: Often **much** faster than naive methods in large dictionaries.  
+**Cons**: A bit more complex to implement, and in extreme cases where a pattern maps to many words, it can degrade.
+
+---
+
+## Approach 4: Bidirectional BFS (Advanced Optimization)
+
+Even with wildcard mapping, BFS might traverse a large portion of the graph. A powerful trick is **Bidirectional BFS**:
+
+1. Start one search from `beginWord` and another from `endWord`.
+2. Expand each frontier level by level.
+3. If the two frontiers ever intersect, you have found the shortest path.
+
+This effectively **cuts the search space** roughly in half (or more), providing an exponential speedup in many cases.
+
+### Time Complexity
+
+- In the best or average scenario, the **depth** from each side shrinks from \(d\) to about \(d/2\), greatly reducing the total number of visits.
+- Implementation details vary, but combining **bidirectional BFS** with **wildcard mapping** is typically the fastest known approach for large inputs.
+
+### Code Example (Bidirectional BFS with Wildcard)
+
+```python
+from collections import defaultdict
+from typing import List
+
+class Solution:
+    def ladderLength(self, beginWord: str, endWord: str, wordList: List[str]) -> int:
+        word_set = set(wordList)
+        if endWord not in word_set:
+            return 0
+
+        L = len(beginWord)
+        # Pre-build wildcard patterns
+        pattern_map = defaultdict(list)
+        for word in word_set:
+            for i in range(L):
+                pattern = word[:i] + "*" + word[i+1:]
+                pattern_map[pattern].append(word)
+
+        # Initialize two "fronts": one from beginWord, one from endWord
+        begin_set = {beginWord}
+        end_set = {endWord}
+        visited = {beginWord, endWord}
+        distance = 1  # We'll count 'beginWord' as the first step
+
+        # Perform bidirectional BFS
+        while begin_set and end_set:
+            # Always expand the smaller frontier for efficiency
+            if len(begin_set) > len(end_set):
+                begin_set, end_set = end_set, begin_set
+
+            next_level = set()
+            distance += 1  # Increment distance for each level
+
+            for word in begin_set:
+                for i in range(L):
+                    pattern = word[:i] + "*" + word[i+1:]
+                    for neighbor in pattern_map[pattern]:
+                        if neighbor in end_set:
+                            return distance  # Found intersection
+                        if neighbor not in visited:
+                            visited.add(neighbor)
+                            next_level.add(neighbor)
+
+            begin_set = next_level  # Update frontier for next iteration
+
+        return 0  # No path found
+```
+
+**How it works**:
+
+1. We maintain two "search fronts": one from `beginWord` (forward) and one from `endWord` (backward).
+2. Each iteration, we expand the smaller set of words by one step.
+3. If the new set of visited words intersects with the other frontier, it means we've found a path in `distance` transformations total.
+4. The wildcard mapping ensures quick neighbor lookups (avoiding an \(N^2\) blowup).
+
+**Pros**:
+
+- Often the fastest approach, especially for large dictionaries.
+- Greatly prunes the search space.
+
+**Cons**:
+
+- More code complexity due to maintaining two fronts and deciding when they intersect.
+
+---
+
+# Edge Cases and Takeaways
+
+1. **Edge Cases**
+
+   - If `endWord` is not in the wordList, return 0 immediately.
+   - If `beginWord == endWord`, some variations might consider the length as 1 or 0, but typically this scenario is trivially no transformation needed or is not applicable in standard statements.
+
+2. **Time Complexity Summary**
+
+   - **Naive**: \(O(N^2 \times L)\) for building or scanning adjacency.
+   - **Wildcard**: ~\(O(N \times L^2)\) typical.
+   - **Bidirectional BFS** can reduce the effective search depth in half.
+
+3. **Why Wildcard Patterns Help**
+
+   - Instead of comparing each word against all others, we transform each word into its \(L\) "wildcard keys" (like `h*t`) and store them in a hash map.
+   - This offers direct neighbor lookups in BFS, usually saving a ton of comparisons.
+
+4. **Python String Slicing Cost**
+   - Doing `word[:i] + '*' + word[i+1:]` is \(O(L)\), so keep that in mind. Sometimes you'll see it referred to as \(O(N \times L)\), but strictly speaking, it's \(O(N \times L^2)\) considering the slicing cost.
+
+---
+
+# Conclusion
+
+**Word Ladder** is an excellent demonstration of how **string manipulation** can be reframed as a **graph shortest-path** problem:
+
+- **Approach 1 & 2**: Build or dynamically compare words in \(O(N^2 \times L)\).
+- **Approach 3**: Use **wildcard patterns** for an often much faster BFS (\(O(N \times L^2)\)).
+- **Approach 4**: **Bidirectional BFS** can cut search depths drastically, making it the most optimal variant when implemented with wildcard mappings.
+
+When implementing in a real interview:
+
+1. Start with a BFS approach.
+2. If the interviewer asks about efficiency or the dictionary is large, move to **wildcard** or **bidirectional BFS**.
+3. Always note edge cases, slicing costs, and potential extreme scenarios.
+
+With these methods, you'll be well-equipped to handle Word Ladder questions confidently—and possibly adapt similar ideas for other **one-letter transformation** puzzles.
