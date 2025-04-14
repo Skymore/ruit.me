@@ -1,0 +1,222 @@
+---
+title: 'Building a Modern Web Stack with Nginx, Supabase, and Vercel Edge Functions'
+date: '2025-04-13'
+tags: ['nginx', 'supabase', 'nextjs', 'vercel', 'edge-functions', 'cloudflare', 'cors']
+draft: false
+summary: 'A detailed walkthrough of setting up a secure and scalable full-stack project using Nginx for static serving and reverse proxy, Supabase as a backend service, and Vercel Edge Functions for fast, distributed logic.'
+images:
+  ['/static/images/banners/assorted-reading-books-on-table__morganharpernichols__OMXPrCAhxrE.jpeg']
+authors: ['default']
+---
+
+### Building a Modern Web Stack with Nginx, Supabase, and Vercel Edge Functions
+
+Today, I explored the combination of **Nginx**, **Supabase**, and **Vercel Edge Functions** to build a scalable, performant, and developer-friendly web architecture. Here's a record of key questions and technical findings I worked through.
+
+---
+
+### 💡 Can Nginx Do Rate Limiting?
+
+Yes. Nginx has built-in rate limiting using two main directives:
+
+- `limit_req_zone`: defines the memory zone and request rate.
+- `limit_req`: applies the rate limit in specific locations.
+
+Example:
+
+```nginx
+limit_req_zone $binary_remote_addr zone=req_zone:10m rate=1r/s;
+
+location /api/ {
+    limit_req zone=req_zone burst=5 nodelay;
+}
+```
+
+This allows IP-based request throttling to protect backend services.
+
+---
+
+### 🌐 Can Nginx Work with Cloudflare Tunnel Locally?
+
+Yes, and it's a powerful combo. Cloudflare Tunnel (`cloudflared`) allows you to expose your local Nginx server (or any service) to the public internet **without a public IP** or port forwarding.
+
+Basic steps:
+
+1. Install `cloudflared` and run `cloudflared tunnel login`.
+2. Create a tunnel: `cloudflared tunnel create my-tunnel`.
+3. Configure `~/.cloudflared/config.yml`:
+
+```yaml
+tunnel: my-tunnel-id
+credentials-file: ~/.cloudflared/my-tunnel-id.json
+
+ingress:
+  - hostname: nginx.example.com
+    service: http://localhost:80
+  - service: http_status:404
+```
+
+4. Run the tunnel: `cloudflared tunnel run my-tunnel`.
+
+Cloudflare will handle HTTPS, DNS, and global access.
+
+---
+
+### 🔁 Can Nginx Solve CORS?
+
+Yes, by using **reverse proxy**, you can bypass CORS entirely from the browser’s perspective.
+
+Frontend requests `/api/...`, Nginx proxies that to your real backend:
+
+```nginx
+location /api/ {
+    proxy_pass http://localhost:8000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+}
+```
+
+Since the request appears same-origin to the browser, CORS is avoided. No need to add `Access-Control-Allow-Origin` headers.
+
+---
+
+### 🧩 Other Ways to Handle CORS?
+
+Besides Nginx reverse proxy, common methods include:
+
+- **Backend CORS headers** (e.g., in FastAPI, Express, Flask)
+- **Frontend dev proxy** (`vite.config.ts`, `CRA`'s `proxy`)
+- **Cloudflare Workers / Vercel Edge Functions** as remote proxies
+
+Each has tradeoffs, but proxying in the same origin (via Nginx or Next.js API Routes) is usually the cleanest.
+
+---
+
+### 🧪 How Does This Work with Vercel + Next.js + Supabase?
+
+Next.js supports native API Routes under `/pages/api/*`, which are deployed as serverless functions (typically AWS Lambda).
+
+Pattern:
+
+- Frontend fetches `/api/data`
+- `/pages/api/data.ts` handles the request
+- Inside the handler, it queries Supabase:
+
+```ts
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+export default async function handler(req, res) {
+  const { data, error } = await supabase.from('todos').select('*')
+  res.status(200).json(data)
+}
+```
+
+No CORS issue, because the request is same-origin.
+
+---
+
+### ⚡ What Are Edge Functions and Why No Cold Start?
+
+Edge Functions are small pieces of code that run on Vercel’s Edge Network (similar to Cloudflare Workers). They don’t use Node.js — instead, they run in a lightweight **V8 sandbox**, which enables near-instant execution and **no cold start**.
+
+They’re great for:
+
+- Cookie parsing
+- Auth header injection
+- Lightweight logic close to the user
+
+They are **not good for**:
+
+- Heavy database queries
+- Anything that uses Node.js native modules
+
+---
+
+### ❌ Why Not Use Edge Functions for Database Access?
+
+- They **don’t support Node.js**, so libraries like `pg`, `mysql2`, `mongoose` won’t work.
+- If you try to use Supabase with `service_role` key in Edge code, you risk leaking it (e.g., if bundled improperly or exposed to the client).
+- Also, Edge regions may be far from your DB region, causing latency.
+
+Instead, use Serverless Functions (API Routes) for database access.
+
+---
+
+### ✅ Can You Use Supabase in Edge Functions at All?
+
+Yes, with some limitations:
+
+- You **can** use `anon` keys to query public data
+- You **should not** use `service_role` keys (security risk)
+- Use the `@supabase/supabase-js` client with `persistSession: false` in Edge runtime
+
+Example:
+
+```ts
+export const runtime = 'edge'
+
+export async function GET() {
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false },
+  })
+
+  const { data } = await supabase.from('todos').select('*')
+  return NextResponse.json(data)
+}
+```
+
+---
+
+## 📊 Architecture Diagrams
+
+To clarify the two different deployment setups discussed today, here are two separate diagrams representing:
+
+- A local development environment using **Nginx + Cloudflare Tunnel**
+- A cloud-based deployment using **Vercel + Supabase + Edge/Serverless Functions**
+
+---
+
+### 🖥️ Local Development with Nginx + Cloudflare Tunnel
+
+This architecture is suitable for local development where you serve static files or APIs locally and expose them securely using Cloudflare Tunnel without needing a public IP.
+
+```mermaid
+graph TD
+    A[Browser] --> B[Cloudflare Tunnel (cloudflared)]
+    B --> C[Nginx (localhost)]
+    C -->|/api/*| D[Backend API Service (localhost:8000)]
+    C -->|Other| E[Static Files (index.html, js, css)]
+```
+
+📝 **Explanation**:
+
+- The browser accesses a public domain (e.g. `nginx.example.com`) routed through Cloudflare Tunnel.
+- Tunnel connects to your local Nginx server.
+- Nginx serves static files and proxies `/api` to your backend.
+
+---
+
+### ☁️ Cloud Deployment with Vercel + Supabase + Edge Functions
+
+This setup represents a modern cloud-based architecture with global distribution and built-in scaling.
+
+```mermaid
+graph TD
+    A[Browser] --> B[Vercel Hosting (Next.js)]
+    B --> C{Request Type}
+    C -->|/api/*| D[Vercel Serverless Function]
+    C -->|/app/api/*| E[Vercel Edge Function]
+
+    D --> F[Supabase (Database + Auth)]
+    E -->|Read-only<br/>anon key only| F
+```
+
+📝 **Explanation**:
+
+- Browser sends requests to your Vercel-hosted site.
+- Depending on the path, the request is routed to:
+  - A **Serverless Function** (`/pages/api`) for full Node.js support and database access.
+  - An **Edge Function** (`/app/api`) for ultra-fast logic at the edge, without service key access.
+- Both interact with **Supabase**, but only Serverless Functions should use secure service keys.
