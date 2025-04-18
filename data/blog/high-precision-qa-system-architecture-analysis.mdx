@@ -1,84 +1,38 @@
 ---
 title: '高精度知识问答系统架构方案分析'
-date: '2025-04-08'
+date: '2025-04-18'
 tags: ['rag', 'llm', 'knowledge-qa', 'ai', 'system-design']
 draft: false
-summary: '全面分析不同类型的高精度知识问答系统架构，包括传统RAG、增强RAG、知识图谱、多轮检索与推理以及大模型内置知识等方案的优缺点与适用场景。'
+summary: '全面分析不同类型的高精度知识问答系统架构，包括传统RAG、摘要增强RAG、知识图谱、多轮检索与推理以及大模型内置知识等方案的优缺点与适用场景。'
 images: ['/static/images/rag.png']
 authors: ['default']
 ---
 
 # 高精度知识问答系统架构方案分析
 
-\*图示：传统 RAG 检索增强生成的问答流程，通过将用户查询与知识库内容相结合，可以显著提升回答的准确性（下方 with RAG 所示）
+_图示：传统 RAG 检索增强生成的问答流程，通过将用户查询与知识库内容相结合，可以显著提升回答的准确性（下方 with RAG 所示）_
 
-## 1. 引言：RAG 与高精度问答的挑战
+## 1. 引言
 
 大型语言模型（LLM）在自然语言处理领域取得了显著进展，但在特定领域或知识密集型任务中，尤其是在处理超出其训练数据或需要当前信息的问题时，仍面临挑战，例如产生“幻觉”（Hallucinations）[1, 2]。为了克服这些挑战，**检索增强生成（Retrieval-Augmented Generation, RAG）**应运而生，成为一种广泛采用的解决方案 [1, 2, 3, 4, 5]。RAG 通过从外部知识库检索相关信息，并将其提供给 LLM 作为上下文，来增强模型的回答能力，从而提高答案的准确性和可靠性 [1, 2, 6, 7, 8]。
 
 RAG 允许模型动态访问最新的或训练语料之外的知识，有效减少了生成事实不正确内容的风险 [1, 2]。目前，RAG 是基于 LLM 的系统中最受欢迎的架构之一，推动了聊天机器人和 LLM 在现实世界应用中的发展 [1]。
 
-然而，传统 RAG 架构也存在局限性。其核心挑战之一是**查询-文档表示不匹配（Query-Document Representation Mismatch）**。用户查询（通常是疑问句）和知识库中的文档（通常是陈述句）在语言结构、句式功能和意图上存在差异，导致它们的嵌入向量在语义空间中可能无法有效对齐 [9]。标准的嵌入模型和相似度度量（如余弦相似度）可能难以准确捕捉这种特定的问答关系 [9, 10]。此外，检索质量直接影响最终答案，单轮检索难以处理复杂问题，并且检索到的内容长度受限于 LLM 的上下文窗口 [11]。
+然而，尽管 RAG 效果显著，传统的 RAG 架构仍存在一些固有的局限性，这限制了其在需要极高精度问答场景下的表现。为了实现更高精度的问答，研究者们提出了多种替代或改进 RAG 的架构方案。
 
-为了实现更高精度的问答，研究者们提出了多种**替代或改进 RAG** 的架构方案。本报告旨在深入分析这些方案，探讨其核心原理、实现方式、优缺点及适用场景，并为技术选型提供指导。报告将覆盖从优化 RAG 内部的检索对齐策略，到采用知识图谱、多轮推理等不同架构范式的多种方法。
+本报告旨在深入分析这些不同的高精度知识问答系统架构方案，探讨其核心原理、实现方式、优缺点及适用场景，并为技术选型提供指导。报告将覆盖从优化 RAG 内部组件到采用知识图谱、多轮推理等不同架构范式的多种方法。
 
-## 2. 理解核心问题：查询-文档表示不匹配
+## 2. 高精度问答架构方案
 
-为了有效解决疑问句与陈述句在嵌入空间中的匹配问题，首先需要深入理解其根源，这涉及到余弦相似度本身的性质、学习嵌入空间的特点以及问句和答句之间固有的语言差异。
+为了应对传统 RAG 的挑战并实现更高精度问答，业界探索了多种架构方案。这些方案可以大致分为改进 RAG 内部组件（如检索优化）和采用不同知识增强范式（如结构化知识、多轮推理）两大类。
 
-### 2.1. 余弦相似度：机制与几何直觉
-
-余弦相似度的计算基于向量的点积和模长，具体公式为：
-$$cos(\theta) = \frac{\vec{A} \cdot \vec{B}}{\|\vec{A}\| \|\vec{B}\|}$$
-其中 $\vec{A}$ 和 $\vec{B}$ 是两个向量，$\theta$ 是它们之间的夹角。该值等价于两个向量先进行 L2 归一化（Normalization）后的点积（Dot Product）[10, 12]。其值域在 $[-1, 1]$ 之间，值为 1 表示向量方向完全相同，0 表示向量正交（无关），-1 表示方向完全相反 [13]。
-
-余弦相似度因其计算简单、结果归一化等特性而广受欢迎 [10]。它衡量的是向量间的方向一致性，忽略了向量的长度（Magnitude）[13]。然而，过度依赖低维空间（如二维或三维）的几何直觉来理解高维嵌入空间中的余弦相似度是危险的 [10]，因为高维空间的几何性质与我们熟悉的低维空间差异巨大。例如，“维度灾难”（Curse of Dimensionality）现象可能在高维空间中影响距离度量的有效性 [14]，甚至可能导致短文档因向量更“集中”而获得不合理的较高相似度得分 [14]。流形假设（Manifold Hypothesis）认为数据点分布在低维流形上，这意味着度量应该是局部的，全局使用单一的点积或余弦相似度可能忽略了流形的局部曲率信息 [12]。
-
-### 2.2. 余弦相似度与学习嵌入的根本局限性
-
-余弦相似度的有效性并非绝对，它高度依赖于其所作用的嵌入空间的特性。而嵌入空间的特性又是由训练嵌入模型的具体方式决定的。
-
-- **度量性质：** 严格来说，余弦相似度并不是一个距离度量（Distance Metric），因为它不满足距离度量的基本要求之一——三角不等式（Triangle Inequality）[12]。它衡量的是方向相似性，而非空间距离。忽略向量模长意味着两个方向相同但长度（可能代表某种重要性或强度）不同的向量会被视为完全相似 [13]，这是否合理取决于嵌入模型的设计意图。
-
-- **依赖嵌入空间：** 余弦相似度的意义完全取决于学习到的嵌入空间的结构。如果嵌入空间是“块状”（clumpy）且整体稀疏（sparse）的 [12, 15]，那么在向量稀疏的“空洞”区域，向量间的距离或角度可能失去明确的语义意义 [12]。
-
-- **训练目标与正则化的影响：** 嵌入模型的训练目标函数（Loss Function）和所使用的正则化（Regularization）技术对嵌入空间的几何结构和语义特性起着决定性作用 [16]。如果在训练过程中模型的目标不是优化余弦相似度（通常情况如此，例如基于点积或对比学习的目标），那么在推理时使用余弦相似度可能会产生任意的、不可控的或不透明的结果 [10, 13, 16]。模型可能从未“见过”余弦相似度，我们无法保证它能有效衡量我们关心的语义关系 [10]。有时，未经归一化的点积甚至可能比余弦相似度效果更好，尤其是在某些密集检索任务中 [16, 17]。
-
-- **任意性与非唯一性：** 针对线性模型（如矩阵分解）的研究表明（其结论对深度模型具有警示意义），学习到的嵌入向量可能存在一定的自由度（例如，可以通过对角矩阵进行缩放变换），这些变换在不影响模型原始训练目标（如预测用户-物品交互的点积）的情况下，却可以任意改变嵌入向量之间的余弦相似度得分，甚至使其非唯一 [16, 17]。这意味着，即使模型的预测能力是确定的，基于其嵌入的余弦相似度结果却可能是任意且无意义的 [16]。
-
-- **语义模糊性：** 高余弦相似度分数并不总能保证是我们期望的那种语义关系。模型可能会将语义相反的词（如“beautiful”和“ugly”，因为它们常出现在相似的语法位置）[12]、仅仅是相关的概念、或者风格相似但意义不同的文本 [10] 映射到相近的向量空间区域。余弦相似度难以区分等价关系（equivalence）、反义关系（antonymy）和相关关系（relatedness）[12]。此外，它对高频词的语义相似度估计可能偏低 [18]，并且作为对称度量，无法捕捉语义相似性的不对称性（例如，“苹果是一种水果” vs “水果是一种苹果”）[18]。
-
-  这种现象背后的逻辑链条是：嵌入模型的训练过程（包括目标函数和正则化选择）直接塑造了向量空间的几何结构和语义属性 [16]。这个空间结构反过来决定了余弦相似度是否能够有效衡量目标任务所需的特定语义关系（例如，问答相关性）。如果在模型训练时没有明确地将空间结构塑造成使得向量夹角能够反映问答相关性，那么事后应用余弦相似度可能衡量的是其他类型的相似性（如主题相似性、风格相似性）[10]。研究 [16] 指出，特定的正则化方法允许对嵌入进行变换，这些变换保持了原始训练目标（如点积预测）不变，但显著改变了余弦相似度，这证明了余弦相似度与模型核心目标之间可能存在的脱节。因此，不考虑嵌入模型的训练背景而盲目使用余弦相似度，是导致匹配问题的核心原因之一 [10, 13, 16]。
-
-### 2.3. 疑问句 vs. 陈述句的鸿沟
-
-问答检索面临的特定挑战在于用户查询通常是疑问句式（interrogative），而知识库中的文档通常是陈述句式（declarative）[9]。
-
-标准的嵌入模型，特别是那些没有针对问答任务进行专门训练的模型，可能会将结构不同的问句和答句映射到嵌入空间中相距较远的位置 [9, 19]。模型可能倾向于将结构相似的问句（例如，都以“What is...”开头）聚集在一起，而不是将问句与其对应的答案联系起来 [19]。例如，“法国的首都是什么？”（What is the capital of France?）和“巴黎是法国的首都。”（Paris is the capital of France.）这两个句子，由于句式结构和包含的虚词（如“what”, “is”）不同，它们的嵌入向量可能不够相似 [9]。同样，“我的名字是简”（My name is Jane）的嵌入可能更接近“我是约翰”（I am John），而不是“你叫什么名字？”（What is your name?）[19]。
-
-除了句式差异，词汇不匹配（Vocabulary Mismatch，即使用不同词语表达相同概念）和语义不匹配（Semantic Mismatch，即相同词语表达不同概念，如“河岸”的bank与“银行”的bank）也是传统检索方法（如基于关键词的稀疏检索）面临的问题 [20, 21]。虽然嵌入模型旨在通过捕捉语义来解决词汇不匹配问题 [20]，但它们自身可能引入新的对齐问题，即疑问句和陈述句之间的结构与意图差异导致的表示不匹配 [9]。
-
-此外，文档分块（Chunking）的策略和块大小（Chunk Size）也会影响嵌入模型能否捕捉到足够的语义信息以进行准确匹配 [14]。过小的块可能缺乏上下文，导致语义表示不充分 [14]。
-
-疑问句与陈述句的表示不匹配问题，实质上凸显了通用嵌入模型在处理特定检索任务（如问答）时的局限性 [9, 22]。在大型通用语料库上训练的模型（如早期的BERT或未经特定微调的ada-002）学习到的是广泛的语义相关性 [22]，但通常缺乏对问句和答句之间那种特定的、非对称的回答关系的理解 [6, 19]，除非通过专门的训练（例如，使用问答对进行微调或对比学习）来弥补这一差距 [19, 23]。通用嵌入模型知道“首都”、“法国”和“巴黎”这些词在语义上相关，也学习了常见的句子结构。但“What is...”的疑问结构与“Paris is...”的陈述结构在模型看来是不同的 [9]。如果没有明确的训练信号告诉模型“这个问句 _对应于_ 这个陈述句”，模型可能会基于它们的主题和结构进行嵌入，导致在问答任务中余弦相似度得分不理想。需要通过微调 [19, 23] 或专门的架构（如在问答对上训练的双塔模型/Bi-encoder [19]）来弥合这种特定的关系鸿沟。
-
-### 2.4. 对检索有效性（尤其在RAG中）的影响
-
-查询-文档表示不匹配直接导致检索效果不佳：真正相关的文档可能因为相似度得分低而被忽略，而一些不相关但结构或主题相似的文档反而可能排名靠前 [9, 24]。
-
-这对 RAG 系统的影响尤为严重 [25, 11]。RAG 的核心在于“检索”然后“生成”[1, 2]。如果检索阶段召回的文档片段质量低下或不相关，那么后续的 LLM 生成器即使能力再强，也难以凭空产生准确、有事实依据的答案 [25, 11]。将不相关的上下文喂给 LLM 会直接导致幻觉（Hallucinations）、错误答案或生成内容与事实脱节 [2, 7, 26]。检索质量是 RAG 系统成功的基石 [4, 5]。
-
-## 3. 高精度问答架构方案
-
-为了应对上述挑战并实现高精度问答，业界探索了多种架构方案。这些方案可以大致分为改进 RAG 内部组件（如检索优化）和采用不同知识增强范式（如结构化知识、多轮推理）两大类。
-
-### 3.1. 方案一：传统 RAG 架构及其局限
+### 2.1. 方案一：传统 RAG 架构及其局限
 
 **核心原理与流程：**
-传统 RAG 架构通过结合**检索（Retrieval）**和**生成（Generation）**来工作 [1, 2]。首先，知识库中的文档在离线阶段被分割成较小的**文本块（chunks）**，并为每个块生成**嵌入向量（Embedding）**，存储在向量数据库中以支持相似性搜索 [1, 2]。当用户提出问题时，系统首先对问题进行编码，然后在向量数据库中检索与问题向量最相似的前 _k_ 个文本块 [1, 2]。最后，将原始问题和检索到的这些文本块一起作为上下文输入到大型语言模型（LLM）中，由 LLM 生成最终的答案 [1, 2, 27]。
+传统 RAG 架构通过结合**检索（Retrieval）**和**生成（Generation）**来工作 [1, 2]。首先，知识库中的文档在离线阶段被分割成较小的**文本块（chunks）**，并为每个块生成**嵌入向量（Embedding）**，存储在向量数据库中以支持相似性搜索 [1, 2]。当用户提出问题时，系统首先对问题进行编码，然后在向量数据库中检索与问题向量最相似的前 _k_ 个文本块 [1, 2]。最后，将原始问题和检索到的这些文本块一起作为上下文输入到大型语言模型（LLM）中，由 LLM 生成最终的答案 [1, 2, 9]。
 
 **知识形式与技术要点：**
-该架构主要处理**非结构化文本**知识。检索通常依赖**向量语义搜索**（例如使用基于 Transformer 的模型如 BERT 或 Sentence-BERT 生成嵌入 [2, 20]）来计算查询和文档块之间的语义相似度 [1, 20]。关键技术包括文本分块、嵌入模型选择和向量数据库（如 Qdrant, Pinecone, ChromaDB [25, 14, 24]）。LLM 在此架构中主要扮演**生成器**的角色，负责理解检索到的上下文并合成流畅、相关的回答 [1, 27]。
+该架构主要处理**非结构化文本**知识。检索通常依赖**向量语义搜索**（例如使用基于 Transformer 的模型如 BERT 或 Sentence-BERT 生成嵌入 [2, 10]）来计算查询和文档块之间的语义相似度 [1, 10]。关键技术包括文本分块、嵌入模型选择和向量数据库（如 Qdrant, Pinecone, ChromaDB [11, 12, 13]）。LLM 在此架构中主要扮演**生成器**的角色，负责理解检索到的上下文并合成流畅、相关的回答 [1, 9]。
 
 **应用场景：**
 适用于需要**动态访问外部知识**的场景，如开放域问答、企业知识库问答、文档助手、客户支持机器人等 [2]。当信息需要频繁更新，或者涉及模型训练数据未覆盖的专业领域知识时，RAG 是一个有效的解决方案 [1]。
@@ -91,95 +45,94 @@ $$cos(\theta) = \frac{\vec{A} \cdot \vec{B}}{\|\vec{A}\| \|\vec{B}\|}$$
 
 **缺点：**
 
-- **依赖检索质量：** 最终答案的质量高度依赖于检索阶段的效果。如果检索器未能找到相关或准确的信息，LLM 的生成质量会受到严重影响 [25, 11, 24]。
-- **上下文窗口限制：** 检索到的文本总量受限于 LLM 的上下文窗口大小，可能导致信息丢失。
+- **依赖检索质量：** 最终答案的质量高度依赖于检索阶段的效果。如果检索器未能找到相关或准确的信息，LLM 的生成质量会受到严重影响 [11, 13, 14]。
+- **查询-文档表示不匹配（Query-Document Representation Mismatch）：** 用户查询（通常是疑问句）和知识库中的文档（通常是陈述句）在语言结构、句式功能和意图上存在差异。这导致使用标准的嵌入模型和相似度度量（如余弦相似度）时，它们的嵌入向量在语义空间中可能无法有效对齐，难以准确捕捉特定的问答关系，从而影响检索效果 [15, 16, 17]。
+- **上下文窗口限制：** 检索到的文本总量受限于 LLM 的上下文窗口大小，可能导致信息丢失或无法处理需要广泛上下文的问题 [14]。
 - **缺乏深度推理：** 传统 RAG 通常是单轮检索，难以处理需要多步推理或整合多个信息源的复杂问题。
-- **查询-文档不匹配：** 如前所述，疑问句和陈述句之间的表示差异可能导致检索效果不佳 [9, 19]。
 
-### 3.2. 方案二：增强型 RAG - 优化检索与表示
+### 2.2. 方案二：增强型 RAG - 优化检索与表示
 
 为了克服传统 RAG 的局限，特别是检索质量问题，研究者们提出了多种增强策略，主要集中在**检索前（Pre-Retrieval）**调整查询或文档表示，以及**检索后（Post-Retrieval）**精炼结果。
 
-#### 3.2.1. 检索前策略：在搜索前对齐表示
+#### 2.2.1. 检索前策略：在搜索前对齐表示
 
 这类策略的核心思想是在进行向量相似度搜索 _之前_，主动修改查询或文档的表示，以期更好地对齐它们的嵌入向量。
 
 - **技术 1：生成问答对 (Generating Question-Answer Pairs)**
 
-  - **机制：** 利用 LLM 自动为知识库中的每个文档块生成一个或多个它可能回答的问题 [1, 3]。然后，可以将文档块用其对应生成问题的嵌入向量来索引（称为**查询域对齐** [28]），或者使用这些文档-问题对进行训练 [1, 3, 19]。
-  - **原理：** 将“查询-文档”匹配转化为“查询-（文档对应的）查询”匹配，期望用户查询与生成的问题之间有更高的相似度 [1, 28]。
+  - **机制：** 利用 LLM 自动为知识库中的每个文档块生成一个或多个它可能回答的问题 [1, 3]。然后，可以将文档块用其对应生成问题的嵌入向量来索引（称为**查询域对齐** [18]），或者使用这些文档-问题对进行训练 [1, 3, 17]。
+  - **原理：** 将“查询-文档”匹配转化为“查询-（文档对应的）查询”匹配，期望用户查询与生成的问题之间有更高的相似度 [1, 18]。
   - **优点：** 直接针对问答关系建模 [3]。
   - **缺点：** 生成成本高，质量依赖 LLM 和提示，增加系统复杂性 [3]。
   - **相关研究/工具：** QuIM-RAG [1], DataMorgana [3], InPars [3], RAGAs [3]。
 
 - **技术 2：文档摘要与 LLM 相关性评估 (Document Summarization & LLM Relevance Assessment)**
 
-  - **机制：** 为文档或块生成摘要，用摘要嵌入进行初步检索 [29]。然后，利用 LLM（作为“评判者” Judge）评估原始文档/块（或摘要）与查询的相关性，进行打分或过滤 [29, 30, 31, 32, 33, 34]。
-  - **原理：** 摘要提供浓缩表示，LLM 提供深度理解能力 [30, 32, 33]。
-  - **优点：** 利用 LLM 强大理解力评估相关性 [30, 32, 33]。
-  - **缺点：** 摘要可能丢失信息 [29]；LLM 判断增加延迟和成本，且存在偏见和不确定性 [30, 31, 32]。摘要评估本身也困难 [8, 35, 36]。
+  - **机制：** 为文档或块生成摘要，用摘要嵌入进行初步检索 [19]。然后，利用 LLM（作为“评判者” Judge）评估原始文档/块（或摘要）与查询的相关性，进行打分或过滤 [19, 20, 21, 22, 23, 24]。
+  - **原理：** 摘要提供浓缩表示，LLM 提供深度理解能力 [20, 22, 23]。
+  - **优点：** 利用 LLM 强大理解力评估相关性 [20, 22, 23]。
+  - **缺点：** 摘要可能丢失信息 [19]；LLM 判断增加延迟和成本，且存在偏见和不确定性 [20, 21, 22]。摘要评估本身也困难 [8, 25, 26]。
   - **分层索引（Hierarchical Indexing）：** 一种结合摘要的有效方式是构建分层索引。先为长文档生成摘要，将摘要作为顶层索引；查询时先检索摘要定位相关文档，再深入检索原文细节。这提高了处理长文档的效率和准确性。LlamaIndex 等框架支持此类功能。
 
 - **技术 3：提取命题内容 (Propositional Content Extraction)**
 
-  - **机制：** 利用 LLM 将用户查询（尤其是疑问句）转换为其核心的命题内容，去除疑问结构等非核心标记，再用转换后的内容嵌入进行检索 [9]。
-  - **原理：** 生成更接近陈述句的查询表示，改善与文档嵌入的对齐 [9]。
-  - **优点：** 直接解决疑问句-陈述句结构差异，对非陈述句效果好 [9]。
-  - **缺点：** 依赖 LLM 准确提取，增加查询延迟，可能丢失细微含义 [9]。
+  - **机制：** 利用 LLM 将用户查询（尤其是疑问句）转换为其核心的命题内容，去除疑问结构等非核心标记，再用转换后的内容嵌入进行检索 [15]。
+  - **原理：** 生成更接近陈述句的查询表示，改善与文档嵌入的对齐 [15]。
+  - **优点：** 直接解决疑问句-陈述句结构差异，对非陈述句效果好 [15]。
+  - **缺点：** 依赖 LLM 准确提取，增加查询延迟，可能丢失细微含义 [15]。
 
 - **技术 4：假设性文档嵌入 (Hypothetical Document Embeddings, HyDE)**
 
-  - **机制：** LLM 根据查询生成一个“假设性”文档/答案，然后用这个假设文档的嵌入去检索真实的文档 [24, 37, 38, 39, 40, 41, 42, 43, 44]。
-  - **原理：** 将“查询-文档”匹配转化为“（假设）文档-（真实）文档”匹配，利用假设文档模拟相关性模式，将其嵌入向量“拉近”真实文档空间 [37, 38]。
-  - **优点：** 显著提升零样本检索性能，无需标注数据 [39, 40, 42]。
-  - **缺点：** 依赖 LLM 生成能力（尤其领域知识 [41]），增加查询延迟和成本 [37, 43]，可能产生幻觉 [40, 41]。
-  - **变种：** Iterative HyDE 通过两轮 RAG 提高精度 [38]；SL-HyDE 针对医疗领域进行自学习优化 [41, 44]；ReDE-RF 提出用 LLM 选择文档进行相关性反馈估计，替代生成假设文档 [43]。
+  - **机制：** LLM 根据查询生成一个“假设性”文档/答案，然后用这个假设文档的嵌入去检索真实的文档 [12, 27, 28, 29, 30, 31, 32, 33, 34]。
+  - **原理：** 将“查询-文档”匹配转化为“（假设）文档-（真实）文档”匹配，利用假设文档模拟相关性模式，将其嵌入向量“拉近”真实文档空间 [27, 28]。
+  - **优点：** 显著提升零样本检索性能，无需标注数据 [29, 30, 32]。
+  - **缺点：** 依赖 LLM 生成能力（尤其领域知识 [31]），增加查询延迟和成本 [27, 33]，可能产生幻觉 [30, 31]。
+  - **变种：** Iterative HyDE 通过两轮 RAG 提高精度 [28]；SL-HyDE 针对医疗领域进行自学习优化 [31, 34]；ReDE-RF 提出用 LLM 选择文档进行相关性反馈估计，替代生成假设文档 [33]。
 
 - **技术 5：其他高级表示/检索方法**
   - **QuOTE (Question-Oriented Text Embeddings):** 用文档块可能回答的假设性问题来增强文档块表示 [6]。
-  - **Debater:** 引入“思考链”让 LLM 在嵌入文档前推理，并将信息整合到嵌入中 [45]。
-  - **HEAL (Hierarchical Embedding Alignment Loss):** 利用层次聚类和对比学习使嵌入与领域特定层次结构对齐 [26]。
-  - **ADDER (Adapted Dense Retrieval):** 在嵌入模型上附加适配器，针对特定任务微调，改善异构和严格检索 [23]。
+  - **Debater:** 引入“思考链”让 LLM 在嵌入文档前推理，并将信息整合到嵌入中 [35]。
+  - **ADDER (Adapted Dense Retrieval):** 在嵌入模型上附加适配器，针对特定任务微调，改善异构和严格检索 [36]。
   - **IIER (Inter-chunk Interactions to Enhance Retrieval):** 使用图检索器，利用块间交互构建证据链，支持多跳问答 [7]。
-  - **混合检索 (Hybrid Dense/Sparse):** 结合稠密语义嵌入和稀疏词汇表示（如 BM25, SPLADE），利用两者优势 [6, 46, 47, 48]。通常使用分数融合技术（如 RRF [46]）。
+  - **混合检索 (Hybrid Dense/Sparse):** 结合稠密语义嵌入和稀疏词汇表示（如 BM25, SPLADE），利用两者优势 [6, 37, 38, 39]。通常使用分数融合技术（如 RRF [37]）。
 
-#### 3.2.2. 检索后策略：通过重排序精炼结果
+#### 2.2.2. 检索后策略：通过重排序精炼结果
 
-在初步检索（召回）之后，对返回的候选结果进行重新排序（Reranking），以提高最终结果列表的精度和相关性 [25, 11, 49, 50, 51]。
+在初步检索（召回）之后，对返回的候选结果进行重新排序（Reranking），以提高最终结果列表的精度和相关性 [11, 14, 40, 41, 42]。
 
-- **必要性：** 第一阶段召回侧重速度和召回率，可能包含不精确结果 [50, 52]。重排序利用更复杂模型进行深度评估，提升精度 [25, 11, 49, 50]。
+- **必要性：** 第一阶段召回侧重速度和召回率，可能包含不精确结果 [41, 43]。重排序利用更复杂模型进行深度评估，提升精度 [11, 14, 40, 41]。
 
 - **方法 1：交叉编码器 (Cross-Encoders)**
 
-  - **机制：** 将查询和每个候选文档 _作为一个整体对_ 输入 Transformer 模型，模型内部充分交互后输出一个相关性得分 [53, 25, 54]。
-  - **优点：** 精度通常最高，能捕捉细微语义关系，零样本效果好 [53, 25, 50, 55]。
-  - **缺点：** 计算成本高，速度慢，延迟随候选数量增加，无法预计算文档表示 [53, 25, 50, 56]。
-  - **实现：** 需要加载预训练模型（如 `ms-marco-MiniLM-L-6-v2` [56]），对每个候选进行推理排序 [53, 25, 57]。Elasticsearch 等平台支持集成 [33, 58]。
+  - **机制：** 将查询和每个候选文档 _作为一个整体对_ 输入 Transformer 模型，模型内部充分交互后输出一个相关性得分 [44, 11, 45]。
+  - **优点：** 精度通常最高，能捕捉细微语义关系，零样本效果好 [44, 11, 41, 46]。
+  - **缺点：** 计算成本高，速度慢，延迟随候选数量增加，无法预计算文档表示 [44, 11, 41, 47]。
+  - **实现：** 需要加载预训练模型（如 `ms-marco-MiniLM-L-6-v2` [47]），对每个候选进行推理排序 [44, 11, 48]。Elasticsearch 等平台支持集成 [23, 49]。
 
 - **方法 2：学习排序 (Learning to Rank, LTR)**
 
-  - **机制：** 使用监督学习方法，基于标注数据（判断列表 Judgment List）训练一个排序函数 [59, 60, 61, 62, 63]。模型（如 LambdaMART [59, 60, 64]）根据一组特征预测相关性得分 [59, 60, 61]。
-  - **特征工程：** LTR 核心在于特征设计，包括文档特征（如 PageRank）、查询特征（如长度）、查询-文档特征（如 BM25 得分、嵌入相似度）[59, 52, 61]。
-  - **训练数据：** 需要包含查询、文档及人工相关性等级（如 0-4）的判断列表 [59, 61]。数据质量和数量至关重要 [59]。
-  - **优点：** 可融合多种信号，针对特定 IR 指标优化，列表法（Listwise）效果好 [60, 61, 62, 63, 64]。
-  - **缺点：** 严重依赖高质量标注数据，成本高；性能取决于特征工程质量；训练复杂 [59, 61]。
+  - **机制：** 使用监督学习方法，基于标注数据（判断列表 Judgment List）训练一个排序函数 [50, 51, 52, 53, 54]。模型（如 LambdaMART [50, 51, 55]）根据一组特征预测相关性得分 [50, 51, 52]。
+  - **特征工程：** LTR 核心在于特征设计，包括文档特征（如 PageRank）、查询特征（如长度）、查询-文档特征（如 BM25 得分、嵌入相似度）[50, 43, 52]。
+  - **训练数据：** 需要包含查询、文档及人工相关性等级（如 0-4）的判断列表 [50, 52]。数据质量和数量至关重要 [50]。
+  - **优点：** 可融合多种信号，针对特定 IR 指标优化，列表法（Listwise）效果好 [51, 52, 53, 54, 55]。
+  - **缺点：** 严重依赖高质量标注数据，成本高；性能取决于特征工程质量；训练复杂 [50, 52]。
 
 - **方法 3：大型语言模型 (LLM) 作为重排序器**
 
-  - **机制：** 直接利用 LLM 评估候选文档与查询的相关性并排序 [25]。通过提示要求 LLM 输出分数或判断 [25, 57]。
-  - **原理：** 借助 LLM 强大的 NLU 和推理能力进行细致判断 [25]。
-  - **优点：** 潜力巨大，精度高，灵活性强（通过提示调整标准）[25]。
-  - **缺点：** 计算成本和延迟非常高 [25]；存在 LLM 固有问题（不确定性、偏见等）[31, 32]。
-  - **实现：** 类似 LLM-as-a-judge [30, 31, 32, 33, 34]，对每个候选调用 LLM API [25]。Cohere Rerank API 是一个例子 [49, 51]。
+  - **机制：** 直接利用 LLM 评估候选文档与查询的相关性并排序 [11]。通过提示要求 LLM 输出分数或判断 [11, 48]。
+  - **原理：** 借助 LLM 强大的 NLU 和推理能力进行细致判断 [11]。
+  - **优点：** 潜力巨大，精度高，灵活性强（通过提示调整标准）[11]。
+  - **缺点：** 计算成本和延迟非常高 [11]；存在 LLM 固有问题（不确定性、偏见等）[21, 22]。
+  - **实现：** 类似 LLM-as-a-judge [20, 21, 22, 23, 24]，对每个候选调用 LLM API [11]。Cohere Rerank API 是一个例子 [40, 42]。
 
 - **方法 4：其他重排序范式**
-  - **语义重排序 (Semantic Reranking):** 通用术语，指利用嵌入或语言模型重排序 [49, 50, 51]。
-  - **启发式重排序 (Heuristic Reranking):** 基于元数据（日期、流行度等）的简单规则 [49]。
-  - **上下文感知重排序 (Context-Aware Reranking):** 结合用户历史或会话上下文 [49]。
-  - **基于强化学习的重排序 (Reinforcement Learning-Based Reranking):** 根据用户反馈优化模型 [49, 52]。
-  - **多向量重排序器 (Multi-Vector Rerankers, 如 ColBERT):** 将查询和文档编码为多个向量，进行更细粒度匹配，效率介于 Bi-Encoder 和 Cross-Encoder 之间 [25]。
+  - **语义重排序 (Semantic Reranking):** 通用术语，指利用嵌入或语言模型重排序 [40, 41, 42]。
+  - **启发式重排序 (Heuristic Reranking):** 基于元数据（日期、流行度等）的简单规则 [40]。
+  - **上下文感知重排序 (Context-Aware Reranking):** 结合用户历史或会话上下文 [40]。
+  - **基于强化学习的重排序 (Reinforcement Learning-Based Reranking):** 根据用户反馈优化模型 [40, 43]。
+  - **多向量重排序器 (Multi-Vector Rerankers, 如 ColBERT):** 将查询和文档编码为多个向量，进行更细粒度匹配，效率介于 Bi-Encoder 和 Cross-Encoder 之间 [11]。
 
-### 3.3. 方案三：知识图谱/结构化知识问答（KAG）
+### 2.3. 方案三：知识图谱/结构化知识问答（KAG）
 
 **核心原理：**
 该方案不依赖纯文本检索，而是利用**结构化知识**（如知识图谱 Knowledge Graph 或数据库）来辅助问答，称为**知识增强生成（Knowledge-Augmented Generation, KAG）**。知识图谱以实体-关系-属性的三元组形式存储事实。问答时，系统直接从图谱查询所需事实，并将这些事实融入 LLM 的回答生成中。KAG 侧重从**结构化事实库**提取精确答案，而非从非结构化文本中检索段落。
@@ -215,15 +168,15 @@ LLM 的角色可以是简单的**生成器**（将查询结果转为自然语言
 - **答案表达有限：** 擅长事实，不擅长解释性长答案，需 LLM 配合。
 - **系统复杂性：** 引入图数据库等新组件，需管理多种索引和查询方式。
 
-### 3.4. 方案四：多轮检索与推理（Agent 策略）
+### 2.4. 方案四：多轮检索与推理（Agent 策略）
 
 **核心原理：**
-该方案允许 LLM **像 Agent 一样自主规划多步查询和推理**，逐步逼近答案。LLM 不再被动接收结果，而是主动决策检索行为，形成**检索-推理-再检索**的闭环，模拟人类解决复杂问题的过程。这通常基于 **ReAct (Reason + Act)** 框架 [45]。
+该方案允许 LLM **像 Agent 一样自主规划多步查询和推理**，逐步逼近答案。LLM 不再被动接收结果，而是主动决策检索行为，形成**检索-推理-再检索**的闭环，模拟人类解决复杂问题的过程。这通常基于 **ReAct (Reason + Act)** 框架 [35]。
 
 **实现方式：**
 
 - _Chain-of-Thought 提示与自问自答 (Self-Ask)：_ LLM 先输出思考步骤，决定下一步行动（如提出子问题并检索），逐步分解复杂问题。
-- _工具使用 Agent：_ 为 LLM 提供调用外部工具（Web 搜索、数据库查询、计算器等）的能力。LLM 根据任务需求自主选择并调用工具获取信息。LangChain 等框架支持构建此类 Agent [45]。
+- _工具使用 Agent：_ 为 LLM 提供调用外部工具（Web 搜索、数据库查询、计算器等）的能力。LLM 根据任务需求自主选择并调用工具获取信息。LangChain 等框架支持构建此类 Agent [35]。
 - _回溯提问 (Backtracking Prompting)：_ 模型生成一个更泛化的问题进行二次检索以获取背景知识，再结合原始问题回答。
 
 **LLM 参与深度：**
@@ -237,8 +190,8 @@ LLM 在此架构中处于**决策中枢**地位，负责**规划、执行、评�
 
 **优点：**
 
-- **复杂问题求解能力强：** 能有效处理多跳、需要分解的问题，显著提高复杂任务准确率 [45]。
-- **事实核查与纠错：** Agent 可在回答前交叉验证信息，增强可靠性 [45]。
+- **复杂问题求解能力强：** 能有效处理多跳、需要分解的问题，显著提高复杂任务准确率 [35]。
+- **事实核查与纠错：** Agent 可在回答前交叉验证信息，增强可靠性 [35]。
 - **灵活应对未知：** 允许探索式查询，整合多源线索，鲁棒性高。
 - **交互自然：** 模拟人类思考过程，可提高透明度和信任感。
 
@@ -249,15 +202,15 @@ LLM 在此架构中处于**决策中枢**地位，负责**规划、执行、评�
 - **对 LLM 要求高：** 需要强大的推理和指令遵循能力。
 - **错误传播风险：** 早期错误可能误导后续推理。
 
-### 3.5. 方案五：大模型内置知识（闭卷问答模型）
+### 2.5. 方案五：大模型内置知识（闭卷问答模型）
 
 **核心原理：**
-通过**微调（Fine-tuning）**或持续预训练，将特定领域知识**直接融入模型参数**中，构建一个不依赖外部检索的“闭卷”问答模型 [23, 65]。模型在推理时从其内部“记忆”中提取答案。
+通过**微调（Fine-tuning）**或持续预训练，将特定领域知识**直接融入模型参数**中，构建一个不依赖外部检索的“闭卷”问答模型 [36, 56]。模型在推理时从其内部“记忆”中提取答案。
 
 **实现方式：**
 
-- _监督微调：_ 使用领域相关的问答对或知识库转换成的问答数据进行训练 [19, 23, 65]。
-- _预训练续训：_ 使用领域文档继续预训练，让模型掌握领域知识分布 [65]。
+- _监督微调：_ 使用领域相关的问答对或知识库转换成的问答数据进行训练 [17, 36, 56]。
+- _预训练续训：_ 使用领域文档继续预训练，让模型掌握领域知识分布 [56]。
 
 **LLM 参与深度：**
 LLM **既是知识存储体也是推理者**。推理流程简单，无外部检索。系统调优主要在离线训练阶段。
@@ -283,13 +236,13 @@ LLM **既是知识存储体也是推理者**。推理流程简单，无外部检
 - **不可解释：** 答案来源不透明。
 - **仍有幻觉风险：** 不能完全避免错误组装知识。
 
-## 4. 解决方案对比分析
+## 3. 解决方案对比分析
 
 选择最优策略需要权衡多个因素，包括相关性提升效果、计算成本（延迟、吞吐量、训练成本）、实现复杂度、数据需求等。下表对主要架构方案进行了总结比较：
 
 | 架构方案                               | 核心机制                                                        | 主要优点                                               | 主要缺点                                                           | 相关性潜力           | 计算成本 (查询延迟/训练或生成) | 实现复杂度            | 数据需求                                              |
 | :------------------------------------- | :-------------------------------------------------------------- | :----------------------------------------------------- | :----------------------------------------------------------------- | :------------------- | :----------------------------- | :-------------------- | :---------------------------------------------------- |
-| **方案一: 传统 RAG**                   | 向量检索文本块 + LLM 生成                                       | 动态知识注入、减少幻觉、可解释                         | 依赖检索质量、上下文限制、缺深度推理、查询-文档不匹配              | 中等                 | 中/低                          | 中                    | 非结构化文本 + 向量数据库                             |
+| **方案一: 传统 RAG**                   | 向量检索文本块 + LLM 生成                                       | 动态知识注入、减少幻觉、可解释                         | 依赖检索质量、**查询-文档不匹配**、上下文限制、缺深度推理          | 中等                 | 中/低                          | 中                    | 非结构化文本 + 向量数据库                             |
 | **方案二: 增强型 RAG (优化检索/表示)** | 结合预处理（HyDE、QA对、摘要、命题提取等）和/或后处理（重排序） | 提升检索精度、处理长文、更好对齐查询意图               | 增加流程复杂度、可能信息损失（摘要）、计算开销增加（LLM调用/重排） | 高                   | 中到高/中到高                  | 中到高                | 非结构化文本 + LLM API/标注数据（LTR）/预训练重排模型 |
 | **方案三: KAG (知识图谱/结构化知识)**  | 查询结构化知识库 (图谱/DB) + LLM 生成                           | 高度准确、一致、可解释、高效利用知识、支持复杂关系推理 | 知识覆盖有限、构建成本高、查询解析难、答案表达有限                 | 非常高（事实型）     | 低到中/高（知识库构建）        | 高                    | 结构化知识库 + 图数据库/查询接口                      |
 | **方案四: 多轮检索与推理 (Agent)**     | LLM 自主规划多步查询与推理                                      | 复杂问题求解强、事实核查、灵活应对未知、交互自然       | 实现调优复杂、性能开销高、对 LLM 要求高、错误传播风险              | 非常高（推理型）     | 高/无                          | 非常高                | 多种知识源 + 强大 LLM + Agent 框架                    |
@@ -298,40 +251,40 @@ LLM **既是知识存储体也是推理者**。推理流程简单，无外部检
 **协同作用与混合方法：**
 实践中，这些方案并非相互排斥，常常组合使用：
 
-- **混合检索 (Hybrid Retrieval)：** 结合稀疏（关键词）和稠密（语义）检索，利用 RRF 等融合策略 [6, 46, 47, 48]。
-- **预处理 + 重排序：** 使用 HyDE 等改善召回，再用交叉编码器等精炼排序 [25, 11, 49, 50]。
+- **混合检索 (Hybrid Retrieval)：** 结合稀疏（关键词）和稠密（语义）检索，利用 RRF 等融合策略 [6, 37, 38, 39]。
+- **预处理 + 重排序：** 使用 HyDE 等改善召回，再用交叉编码器等精炼排序 [11, 14, 40, 41]。
 - **多层重排序：** 先用快速重排器粗筛，再用高精度慢速模型精排。
 - **KAG + RAG 混合：** 先查图谱获取核心事实，再用 RAG 检索文本补充细节或解释。
 
 组合方法能发挥各自优势，但会增加系统复杂度和延迟。
 
-## 5. 模型与框架实践建议
+## 4. 模型与框架实践建议
 
 - **大型模型选择：**
-  - 复杂推理（Agent）：推荐 GPT-4, Claude 2/3, Gemini 等顶级模型 [45]。Claude 的长上下文尤其适合处理大量检索信息。
+  - 复杂推理（Agent）：推荐 GPT-4, Claude 2/3, Gemini 等顶级模型 [35]。Claude 的长上下文尤其适合处理大量检索信息。
   - 结构化查询生成/简单回答：GPT-3.5 等中等模型可能足够。
   - 闭卷微调：建议 LLaMA-2 13B+ 等数十亿参数模型，以承载知识。
 - **软件框架选型：**
-  - **LangChain：** 强大的链式调用和 Agent 框架，适合多轮、工具使用场景 [45]。
+  - **LangChain：** 强大的链式调用和 Agent 框架，适合多轮、工具使用场景 [35]。
   - **LlamaIndex (GPT Index)：** 擅长构建复杂索引（如分层摘要索引），优化 RAG 检索。
   - **Haystack：** 成熟的端到端问答框架，便于组合检索器和阅读器（生成器）。
   - **知识图谱工具：** Neo4j (图数据库) + Cypher, RDF 存储 + SPARQL。LangChain 等框架已集成部分接口。蚂蚁 GraphRAG 使用 DB-GPT + TuGraph。
-  - **向量数据库：** Qdrant, Pinecone, Weaviate, ChromaDB, Elasticsearch 等提供向量存储和检索能力 [53, 25, 14, 24]。
-  - **重排序模型/服务：** Cohere Rerank API [49, 51], 开源 Cross-Encoder 模型（如 `ms-marco-MiniLM-L-6-v2` [56]）。
-  - **评估工具：** RAGAS [66], Evidently AI [33], TruLens 等用于评估 RAG 各环节性能。LLM-as-a-judge 是常用评估方法 [30, 31, 32, 33, 34]。
+  - **向量数据库：** Qdrant, Pinecone, Weaviate, ChromaDB, Elasticsearch 等提供向量存储和检索能力 [44, 11, 12, 13]。
+  - **重排序模型/服务：** Cohere Rerank API [40, 42], 开源 Cross-Encoder 模型（如 `ms-marco-MiniLM-L-6-v2` [47]）。
+  - **评估工具：** RAGAS [57], Evidently AI [23], TruLens 等用于评估 RAG 各环节性能。LLM-as-a-judge 是常用评估方法 [20, 21, 22, 23, 24]。
 
-## 6. 结论与未来展望
+## 5. 结论与未来展望
 
-### 6.1. 核心发现总结
+### 5.1. 核心发现总结
 
-1.  **基础 RAG 的核心挑战**在于查询-文档表示不匹配和检索质量瓶颈 [9, 11]。
-2.  **增强型 RAG** 通过优化检索前表示（如 HyDE, QA 对生成, 命题提取 [9, 1, 3, 24, 37, 38, 39, 40, 41, 42, 43, 44]）和检索后精炼（重排序 [53, 59, 25, 11, 49, 50, 51, 52, 54, 55, 56, 57, 58, 60, 61, 62, 63, 64, 67]）来提升精度。
+1.  **基础 RAG 的核心挑战**在于依赖检索质量，特别是查询-文档表示不匹配和上下文窗口限制 [11, 13, 14, 15, 16, 17]。
+2.  **增强型 RAG** 通过优化检索前表示（如 HyDE, QA 对生成, 命题提取 [1, 3, 12, 15, 27, 28, 29, 30, 31, 32, 33, 34]）和检索后精炼（重排序 [11, 14, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 58]）来提升精度。
 3.  **KAG** 利用结构化知识保证事实准确性，特别适合事实型问答，但构建成本高且知识覆盖受限。
-4.  **多轮 Agent 策略** 赋予 LLM 自主规划和推理能力，擅长处理复杂问题，但实现复杂且开销大 [45]。
-5.  **闭卷模型** 通过微调内置知识，响应快且无需外部依赖，但知识更新困难且存在覆盖和幻觉问题 [23, 65]。
+4.  **多轮 Agent 策略** 赋予 LLM 自主规划和推理能力，擅长处理复杂问题，但实现复杂且开销大 [35]。
+5.  **闭卷模型** 通过微调内置知识，响应快且无需外部依赖，但知识更新困难且存在覆盖和幻觉问题 [36, 56]。
 6.  **混合架构** 通常能结合多种方案的优势，是实践中的常见选择。
 
-### 6.2. 策略选择指南
+### 5.2. 策略选择指南
 
 - **高精度事实问答，知识库完善：** 优先考虑 **KAG (方案三)** 或 KAG+RAG 混合。
 - **复杂推理、多跳问题：** 优先考虑 **多轮 Agent 策略 (方案四)**。
@@ -345,18 +298,18 @@ LLM **既是知识存储体也是推理者**。推理流程简单，无外部检
 - **人工检查：** 结合自动化指标和人工分析来评估结果。
 - **迭代优化：** 从简单方案开始，逐步引入更复杂的组件。
 
-### 6.3. 未来研究方向与潜在发展
+### 5.3. 未来研究方向与潜在发展
 
 - **更高效精准的检索与重排序：** 降低高精度方法（如交叉编码器、LLM 重排）的成本和延迟。
-- **高质量合成数据生成：** 提升 LLM 生成 QA 对、假设文档等数据的能力和可控性 [1, 3, 68]。
-- **LLM 组件的可靠性与对齐：** 缓解 LLM 在各环节中的偏见、不确定性和幻觉问题 [26, 30, 31, 32, 33]。
+- **高质量合成数据生成：** 提升 LLM 生成 QA 对、假设文档等数据的能力和可控性 [1, 3, 59]。
+- **LLM 组件的可靠性与对齐：** 缓解 LLM 在各环节中的偏见、不确定性和幻觉问题 [20, 21, 22, 23]。
 - **端到端优化：** 探索对整个 RAG/KAG 流水线的联合优化方法。
-- **标准化评估框架：** 建立更全面、可靠、自动化的评估方法学和基准 [3, 5, 8, 30, 31, 32, 33, 34, 66, 68, 69]。
+- **标准化评估框架：** 建立更全面、可靠、自动化的评估方法学和基准 [3, 5, 8, 20, 21, 22, 23, 24, 57, 59, 60]。
 - **多模态 RAG：** 将 RAG 扩展到处理图像、音频等多模态信息。
 
 总之，构建高精度知识问答系统需要在多种架构和技术之间进行权衡。理解每种方案的优劣，并结合具体应用场景进行选择和组合，是通往更智能、更可靠问答系统的关键路径。
 
-## 7. 参考文献
+## 6. 参考文献
 
 1.  Singh, S., et al. (2025). QuIM-RAG: Question Inverted Index Matching for Retrieval-Augmented Generation. _arXiv preprint arXiv:2501.02702_. (URL: [https://arxiv.org/html/2501.02702v1](https://arxiv.org/html/2501.02702v1))
 2.  Shah, R., et al. (2024). Building and Evaluating a Production-Ready RAG Application for Question Answering. _arXiv preprint arXiv:2409.03708_. (URL: [https://arxiv.org/html/2409.03708v1](https://arxiv.org/html/2409.03708v1))
@@ -366,64 +319,55 @@ LLM **既是知识存储体也是推理者**。推理流程简单，无外部检
 6.  Sharma, A., et al. (2025). QuOTE: Question-Oriented Text Embeddings for Retrieval Augmented Generation. _arXiv preprint arXiv:2502.10976_. (URL: [https://arxiv.org/html/2502.10976v1](https://arxiv.org/html/2502.10976v1))
 7.  Shi, F., et al. (2024). Iterative Evidence Chain Retrieval with Inter-chunk Interactions for Question Answering. _arXiv preprint arXiv:2408.02907_. (URL: [https://arxiv.org/html/2408.02907v1](https://arxiv.org/html/2408.02907v1))
 8.  Zhang, T., et al. (2024). Summarization as a Testbed for Long Context Evaluation. _arXiv preprint arXiv:2407.01370_. (URL: [https://arxiv.org/html/2407.01370v1](https://arxiv.org/html/2407.01370v1))
-9.  Silva, R., & Paraboni, I. (2025). Enhancing RAG Retrieval by Aligning Query Intent with Propositional Content using Speech Act Theory. _arXiv preprint arXiv:2503.10654_. (URL: [https://arxiv.org/html/2503.10654](https://arxiv.org/html/2503.10654))
-10. Migdal, P. (2025). _Don't Use Cosine Similarity Blindly_. Blog Post. (URL: [https://p.migdal.pl/blog/2025/01/dont-use-cosine-similarity/](https://p.migdal.pl/blog/2025/01/dont-use-cosine-similarity/))
-11. Galileo Blog. (Date Unknown). _Mastering RAG: How to Select a Reranking Model_. (URL: [https://www.galileo.ai/blog/mastering-rag-how-to-select-a-reranking-model](https://www.galileo.ai/blog/mastering-rag-how-to-select-a-reranking-model))
-12. Hacker News. (Date Unknown). _Comment Thread on Cosine Similarity Limitations_. (URL: [https://news.ycombinator.com/item?id=39675585](https://news.ycombinator.com/item?id=39675585))
-13. BDTechTalks. (2024). _Netflix study questions the reliability of cosine similarity in embedding models_. (URL: [https://bdtechtalks.com/2024/03/21/netflix-cosine-similarity-embedding-models/](https://bdtechtalks.com/2024/03/21/netflix-cosine-similarity-embedding-models/))
-14. Pinecone Community Forum. (Date Unknown). _My PDF RAG app isn't able to return correct documents for a query, what may be the reason?_ (URL: [https://community.pinecone.io/t/my-pdf-rag-app-isnt-able-to-return-correct-documents-for-a-query-what-may-be-the-reason/7505](https://community.pinecone.io/t/my-pdf-rag-app-isnt-able-to-return-correct-documents-for-a-query-what-may-be-the-reason/7505))
-15. Stack Exchange - Cross Validated. (2017). _Drawbacks with cosine similarity?_ (URL: [https://stats.stackexchange.com/questions/266979/drawbacks-with-cosine-similarity](https://stats.stackexchange.com/questions/266979/drawbacks-with-cosine-similarity))
-16. Steck, H., Ekanadham, C., & Kallus, N. (2024). On the Arbitrariness of Similarity Search for Embeddings Based on Dot-Products. _arXiv preprint arXiv:2403.05440_. (URL: [https://arxiv.org/html/2403.05440v1](https://arxiv.org/html/2403.05440v1))
-17. Shaped.ai Blog. (2024). _Cosine Similarity: Not the Silver Bullet We Thought It Was_. (URL: [https://www.shaped.ai/blog/cosine-similarity-not-the-silver-bullet-we-thought-it-was](https://www.shaped.ai/blog/cosine-similarity-not-the-silver-bullet-we-thought-it-was))
-18. Zhou, D., et al. (2022). Problems with Cosine as a Measure of Embedding Similarity for High Frequency Words. _ResearchGate Publication 361057590_. (URL: [https://www.researchgate.net/publication/361057590_Problems_with_Cosine_as_a_Measure_of_Embedding_Similarity_for_High_Frequency_Words](https://www.researchgate.net/publication/361057590_Problems_with_Cosine_as_a_Measure_of_Embedding_Similarity_for_High_Frequency_Words))
-19. Free Law Project Blog. (2025). _Semantic Search: A Leap Forward in Legal Research_. (URL: [https://free.law/2025/03/11/semantic-search](https://free.law/2025/03/11/semantic-search))
-20. Elastic Search Labs Blog. (Date Unknown). _Multilingual vector search with the E5 embedding model_. (URL: [https://www.elastic.co/search-labs/blog/multilingual-vector-search-e5-embedding-model](https://www.elastic.co/search-labs/blog/multilingual-vector-search-e5-embedding-model))
-21. IntraFind Blog. (Date Unknown). _Semantic Search: Understanding search queries with AI_. (URL: [https://intrafind.com/en/blog/semantic-search](https://intrafind.com/en/blog/semantic-search))
-22. Stack Overflow. (Date Unknown). _How to get better performance out of embedding models for retrieval / semantic search?_ (URL: [https://stackoverflow.com/questions/77771455/how-to-get-better-performance-out-of-embedding-models-for-retrieval-semantic-sea](https://stackoverflow.com/questions/77771455/how-to-get-better-performance-out-of-embedding-models-for-retrieval-semantic-sea))
-23. Singh, A., et al. (2023). Adapted Dense Retrieval: A General Approach for Improving Task-Specific Dense Retrieval. _arXiv preprint arXiv:2310.05380_. (URL: [https://arxiv.org/pdf/2310.05380](https://arxiv.org/pdf/2310.05380))
-24. SAPPhIRE Paper Snippet (Context). (2024). _Reference to HyDE limitations_. (Derived from context mentioning URL: [https://www.arxiv.org/pdf/2406.19493](https://www.arxiv.org/pdf/2406.19493))
-25. Qdrant Documentation. (Date Unknown). _Reranking in RAG with Qdrant Vector Database_. (URL: [https://qdrant.tech/documentation/search-precision/reranking-semantic-search/](https://qdrant.tech/documentation/search-precision/reranking-semantic-search/))
-26. Singh, S., et al. (2024). HEAL: Aligning Large Language Model Embeddings with Domain-Specific Hierarchical Content for Enhanced Retrieval-Augmented Generation. _arXiv preprint arXiv:2412.04661_. (URL: [https://arxiv.org/html/2412.04661v1](https://arxiv.org/html/2412.04661v1))
-27. Reddit r/LocalLLaMA. (Date Unknown). _Is LLM necessary for RAG if we can retreive the answer directly?_ (URL: [https://www.reddit.com/r/LocalLLaMA/comments/1avayel/is_llm_necessary_for_rag_if_we_can_retreive/](https://www.reddit.com/r/LocalLLaMA/comments/1avayel/is_llm_necessary_for_rag_if_we_can_retreive/))
-28. Bai, Y., et al. (2024). A Survey on Retrieval-Augmented Generation: Paradigms and Applications. _arXiv preprint arXiv:2409.14924_. (URL: [https://arxiv.org/html/2409.14924v1](https://arxiv.org/html/2409.14924v1))
-29. Reddit r/LocalLLaMA. (Date Unknown). _Document Comparison RAG - The struggle is real_. (URL: [https://www.reddit.com/r/LocalLLaMA/comments/1cn659i/document_comparison_rag_the_struggle_is_real/](https://www.reddit.com/r/LocalLLaMA/comments/1cn659i/document_comparison_rag_the_struggle_is_real/))
-30. Schmid, P. (Date Unknown). _How to Evaluate LLMs and RAG Applications_. (URL: [https://www.philschmid.de/evaluate-llm](https://www.philschmid.de/evaluate-llm))
-31. Databricks Blog. (Date Unknown). _LLM Auto-Evaluation Best Practices for RAG Applications, Part 1_. (URL: [https://www.databricks.com/blog/LLM-auto-eval-best-practices-RAG](https://www.databricks.com/blog/LLM-auto-eval-best-practices-RAG))
-32. Confident AI Blog. (Date Unknown). _Why LLM-as-a-Judge is the Best LLM Evaluation Method_. (URL: [https://www.confident-ai.com/blog/why-llm-as-a-judge-is-the-best-llm-evaluation-method](https://www.confident-ai.com/blog/why-llm-as-a-judge-is-the-best-llm-evaluation-method))
-33. Evidently AI Blog. (Date Unknown). _LLM as a Judge: How to Evaluate LLMs with LLMs_. (URL: [https://www.evidentlyai.com/llm-guide/llm-as-a-judge](https://www.evidentlyai.com/llm-guide/llm-as-a-judge))
-34. Vespa Blog. (Date Unknown). _Improving retrieval with LLM-as-a-judge_. (URL: [https://blog.vespa.ai/improving-retrieval-with-llm-as-a-judge/](https://blog.vespa.ai/improving-retrieval-with-llm-as-a-judge/))
-35. Kroll, B., et al. (2024). Evaluating LLM-Based Abstractive Summarization for Spoken Language Documents. _Interspeech 2024_. (URL: [https://www.isca-archive.org/interspeech_2024/kroll24_interspeech.pdf](https://www.isca-archive.org/interspeech_2024/kroll24_interspeech.pdf))
-36. Reddit r/LocalLLaMA. (Date Unknown). _What's the best LLM for summarization of long documents?_ (URL: [https://www.reddit.com/r/LocalLLaMA/comments/1891o5m/whats_the_best_llm_for_summarization_of_long/](https://www.reddit.com/r/LocalLLaMA/comments/1891o5m/whats_the_best_llm_for_summarization_of_long/))
-37. Pondhouse Data Blog. (Date Unknown). _Advanced RAG: Improving Retrieval-Augmented Generation with Hypothetical Document Embeddings (HyDE)_. (URL: [https://www.pondhouse-data.com/blog/advanced-rag-hypothetical-document-embeddings](https://www.pondhouse-data.com/blog/advanced-rag-hypothetical-document-embeddings))
-38. Epsilla Blog. (Date Unknown). _Demystifying RAG-Empowered Chat Agents: Aligning Question and Document Embedding Spaces with HyDE_. (URL: [https://www.epsilla.com/blogs/demystifying-rag-empowered-chat-agents-aligning-question-and-document-embedding-spaces-with-hyde](https://www.epsilla.com/blogs/demystifying-rag-empowered-chat-agents-aligning-question-and-document-embedding-spaces-with-hyde))
-39. Gao, L., et al. (2023). Precise Zero-Shot Dense Retrieval without Relevance Labels. _Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)_. (URL: [https://aclanthology.org/2023.acl-long.99/](https://aclanthology.org/2023.acl-long.99/))
-40. Gao, L., et al. (2022). Precise Zero-Shot Dense Retrieval without Relevance Labels. _arXiv preprint arXiv:2212.10496_. (URL: [https://arxiv.org/pdf/2212.10496](https://arxiv.org/pdf/2212.10496))
-41. Chen, Z., et al. (2024). SL-HyDE: Self-Learning Hypothetical Document Embeddings for Zero-Shot Medical Information Retrieval. _arXiv preprint arXiv:2410.20050_. (URL: [https://arxiv.org/html/2410.20050v1](https://arxiv.org/html/2410.20050v1))
-42. Gao, L., et al. (2022). Precise Zero-Shot Dense Retrieval without Relevance Labels. _arXiv abstract arXiv:2212.10496_. (URL: [https://arxiv.org/abs/2212.10496](https://arxiv.org/abs/2212.10496))
-43. Mackenzie, J., et al. (2024). Real Document Embeddings from Relevance Feedback. _arXiv preprint arXiv:2410.21242_. (URL: [https://arxiv.org/html/2410.21242v1](https://arxiv.org/html/2410.21242v1))
-44. Chen, Z., et al. (2024). SL-HyDE: Self-Learning Hypothetical Document Embeddings for Zero-Shot Medical Information Retrieval. _arXiv abstract arXiv:2410.20050_. (URL: [https://arxiv.org/abs/2410.20050](https://arxiv.org/abs/2410.20050))
-45. Zhao, Z., et al. (2025). Debater: Enhancing Dense Retrieval by Unleasing the Deliberate Thinking Ability of Large Language Models. _arXiv preprint arXiv:2502.12974_. (URL: [https://arxiv.org/html/2502.12974v1](https://arxiv.org/html/2502.12974v1))
-46. Superlinked VectorHub Articles. (Date Unknown). _Optimizing RAG With Hybrid Search & Reranking_. (URL: [https://superlinked.com/vectorhub/articles/optimizing-rag-with-hybrid-search-reranking](https://superlinked.com/vectorhub/articles/optimizing-rag-with-hybrid-search-reranking))
-47. OpenAI Community Forum. (2023). _Embeddings giving incorrect results_. (URL: [https://community.openai.com/t/embeddings-giving-incorrect-results/360735](https://community.openai.com/t/embeddings-giving-incorrect-results/360735))
-48. Ghosh, S., et al. (2024). Hybrid Information Retrieval with Joint Learning of Sparse Lexical and Dense Semantic Representations. _arXiv preprint arXiv:2405.13173_. (URL: [https://arxiv.org/html/2405.13173v1](https://arxiv.org/html/2405.13173v1))
-49. LF Technology Blog. (Date Unknown). _Unlocking RAG Potential: Enhancing Retrieval Through Reranking_. (URL: [https://lftechnology.com/blog/unlocking-rag-potential-retrieval-through-reranking](https://lftechnology.com/blog/unlocking-rag-potential-retrieval-through-reranking))
-50. Elastic Search Labs Blog. (Date Unknown). _Introducing the Elastic Semantic Reranker - Part 1: Improving Relevance with Semantic Reranking_. (URL: [https://www.elastic.co/search-labs/blog/elastic-semantic-reranker-part-1](https://www.elastic.co/search-labs/blog/elastic-semantic-reranker-part-1))
-51. Elastic Search Labs Blog. (Date Unknown). _Semantic Reranking with Retrievers_. (URL: [https://www.elastic.co/search-labs/blog/semantic-reranking-with-retrievers](https://www.elastic.co/search-labs/blog/semantic-reranking-with-retrievers))
-52. Amazon Science Blog. (Date Unknown). _From structured search to learning to rank and retrieve_. (URL: [https://www.amazon.science/blog/from-structured-search-to-learning-to-rank-and-retrieve](https://www.amazon.science/blog/from-structured-search-to-learning-to-rank-and-retrieve))
-53. Weaviate Blog. (2022). _Cross-Encoders as Reranker_. (URL: [https://weaviate.io/blog/cross-encoders-as-reranker](https://weaviate.io/blog/cross-encoders-as-reranker))
-54. Elasticsearch Reference. (Current). _Semantic reranking_. (URL: [https://www.elastic.co/guide/en/elasticsearch/reference/current/semantic-reranking.html](https://www.elastic.co/guide/en/elasticsearch/reference/current/semantic-reranking.html))
-55. Osanseviero Blog. (Date Unknown). _Sentence Embeddings Part 2: Cross-Encoders_. (URL: [https://osanseviero.github.io/hackerllama/blog/posts/sentence_embeddings2/](https://osanseviero.github.io/hackerllama/blog/posts/sentence_embeddings2/))
-56. DeepLearning.AI Community. (2024). _Crossencoder Re-ranking_. (URL: [https://community.deeplearning.ai/t/crossencoder-re-ranking/537938](https://community.deeplearning.ai/t/crossencoder-re-ranking/537938))
-57. OpenAI Cookbook. (Date Unknown). _Search Reranking with Cross-Encoders_. (URL: [https://cookbook.openai.com/examples/search_reranking_with_cross-encoders](https://cookbook.openai.com/examples/search_reranking_with_cross-encoders))
-58. Elastic Search Labs Blog. (Date Unknown). _Elasticsearch Cross-Encoder Reranker with HuggingFace_. (URL: [https://www.elastic.co/search-labs/blog/elasticsearch-cross-encoder-reranker-huggingface](https://www.elastic.co/search-labs/blog/elasticsearch-cross-encoder-reranker-huggingface))
-59. Elasticsearch Reference. (Current). _Learning to rank (LTR)_. (URL: [https://www.elastic.co/guide/en/elasticsearch/reference/current/learning-to-rank.html](https://www.elastic.co/guide/en/elasticsearch/reference/current/learning-to-rank.html))
-60. Towards Data Science. (Date Unknown). _Introduction to Ranking Algorithms_. (URL: [https://towardsdatascience.com/introduction-to-ranking-algorithms-4e4639d65b8](https://towardsdatascience.com/introduction-to-ranking-algorithms-4e4639d65b8))
-61. Wikipedia. (Date Unknown). _Learning to rank_. (URL: [https://en.wikipedia.org/wiki/Learning_to_rank](https://en.wikipedia.org/wiki/Learning_to_rank))
-62. Liu, T. Y. (2009). Learning to Rank for Information Retrieval. _Foundations and Trends® in Information Retrieval, 3_(3), 225-331. (Referenced via URL: [https://dmice.ohsu.edu/bedricks/courses/cs635_spring_2017/pdf/liu_2009.pdf](https://dmice.ohsu.edu/bedricks/courses/cs635_spring_2017/pdf/liu_2009.pdf))
-63. Liu, T. Y. (2009). _Learning to Rank for Information Retrieval (Tutorial Slides)_. (Referenced via URL: [https://didawiki.cli.di.unipi.it/lib/exe/fetch.php/magistraleinformatica/ir/ir13/1\_-_learning_to_rank.pdf](https://didawiki.cli.di.unipi.it/lib/exe/fetch.php/magistraleinformatica/ir/ir13/1_-_learning_to_rank.pdf))
-64. Havrylov, S. (Date Unknown). _Learning to Rank_. Blog Post. (URL: [https://hav4ik.github.io/learning-to-rank/](https://hav4ik.github.io/learning-to-rank/))
-65. OpenAI Community Forum. (2023). _Foundational / Must-Read GPT / LLM Papers_. (URL: [https://community.openai.com/t/foundational-must-read-gpt-llm-papers/197003?page=3](https://community.openai.com/t/foundational-must-read-gpt-llm-papers/197003?page=3))
-66. Li, J., et al. (2024). Evaluating Retrieval-Augmented Generation Systems with Generated Multi-hop Questions. _arXiv preprint arXiv:2412.12300_. (URL: [https://arxiv.org/html/2412.12300v1](https://arxiv.org/html/2412.12300v1))
-67. Reddit r/LocalLLaMA. (2023). _Explain Reranking_. (URL: [https://www.reddit.com/r/LocalLLaMA/comments/1ayka0f/explain_reranking/](https://www.reddit.com/r/LocalLLaMA/comments/1ayka0f/explain_reranking/))
-68. Pal, C., et al. (2024). Automated Exam Generation for Evaluating Retrieval-Augmented Large Language Models (RAG). _arXiv preprint arXiv:2405.13622_. (URL: [https://arxiv.org/html/2405.13622v1](https://arxiv.org/html/2405.13622v1))
-69. Wang, X., et al. (2024). A Survey on Evaluation of Retrieval-Augmented Generation. _arXiv preprint arXiv:2405.07437_. (URL: [https://arxiv.org/html/2405.07437v2](https://arxiv.org/html/2405.07437v2))
+9.  Reddit r/LocalLLaMA. (Date Unknown). _Is LLM necessary for RAG if we can retreive the answer directly?_ (URL: [https://www.reddit.com/r/LocalLLaMA/comments/1avayel/is_llm_necessary_for_rag_if_we_can_retreive/](https://www.reddit.com/r/LocalLLaMA/comments/1avayel/is_llm_necessary_for_rag_if_we_can_retreive/))
+10. Elastic Search Labs Blog. (Date Unknown). _Multilingual vector search with the E5 embedding model_. (URL: [https://www.elastic.co/search-labs/blog/multilingual-vector-search-e5-embedding-model](https://www.elastic.co/search-labs/blog/multilingual-vector-search-e5-embedding-model))
+11. Qdrant Documentation. (Date Unknown). _Reranking in RAG with Qdrant Vector Database_. (URL: [https://qdrant.tech/documentation/search-precision/reranking-semantic-search/](https://qdrant.tech/documentation/search-precision/reranking-semantic-search/))
+12. SAPPhIRE Paper Snippet (Context). (2024). _Reference to HyDE limitations_. (Derived from context mentioning URL: [https://www.arxiv.org/pdf/2406.19493](https://www.arxiv.org/pdf/2406.19493))
+13. Pinecone Community Forum. (Date Unknown). _My PDF RAG app isnt able to return correct documents for a query, what may be the reason?_ (URL: [https://community.pinecone.io/t/my-pdf-rag-app-isnt-able-to-return-correct-documents-for-a-query-what-may-be-the-reason/7505](https://community.pinecone.io/t/my-pdf-rag-app-isnt-able-to-return-correct-documents-for-a-query-what-may-be-the-reason/7505))
+14. Galileo Blog. (Date Unknown). _Mastering RAG: How to Select a Reranking Model_. (URL: [https://www.galileo.ai/blog/mastering-rag-how-to-select-a-reranking-model](https://www.galileo.ai/blog/mastering-rag-how-to-select-a-reranking-model))
+15. Silva, R., & Paraboni, I. (2025). Enhancing RAG Retrieval by Aligning Query Intent with Propositional Content using Speech Act Theory. _arXiv preprint arXiv:2503.10654_. (URL: [https://arxiv.org/html/2503.10654](https://arxiv.org/html/2503.10654))
+16. Migdal, P. (2025). _Don't Use Cosine Similarity Blindly_. Blog Post. (URL: [https://p.migdal.pl/blog/2025/01/dont-use-cosine-similarity/](https://p.migdal.pl/blog/2025/01/dont-use-cosine-similarity/))
+17. Free Law Project Blog. (2025). _Semantic Search: A Leap Forward in Legal Research_. (URL: [https://free.law/2025/03/11/semantic-search](https://free.law/2025/03/11/semantic-search))
+18. Bai, Y., et al. (2024). A Survey on Retrieval-Augmented Generation: Paradigms and Applications. _arXiv preprint arXiv:2409.14924_. (URL: [https://arxiv.org/html/2409.14924v1](https://arxiv.org/html/2409.14924v1))
+19. Reddit r/LocalLLaMA. (Date Unknown). _Document Comparison RAG - The struggle is real_. (URL: [https://www.reddit.com/r/LocalLLaMA/comments/1cn659i/document_comparison_rag_the_struggle_is_real/](https://www.reddit.com/r/LocalLLaMA/comments/1cn659i/document_comparison_rag_the_struggle_is_real/))
+20. Schmid, P. (Date Unknown). _How to Evaluate LLMs and RAG Applications_. (URL: [https://www.philschmid.de/evaluate-llm](https://www.philschmid.de/evaluate-llm))
+21. Databricks Blog. (Date Unknown). _LLM Auto-Evaluation Best Practices for RAG Applications, Part 1_. (URL: [https://www.databricks.com/blog/LLM-auto-eval-best-practices-RAG](https://www.databricks.com/blog/LLM-auto-eval-best-practices-RAG))
+22. Confident AI Blog. (Date Unknown). _Why LLM-as-a-Judge is the Best LLM Evaluation Method_. (URL: [https://www.confident-ai.com/blog/why-llm-as-a-judge-is-the-best-llm-evaluation-method](https://www.confident-ai.com/blog/why-llm-as-a-judge-is-the-best-llm-evaluation-method))
+23. Evidently AI Blog. (Date Unknown). _LLM as a Judge: How to Evaluate LLMs with LLMs_. (URL: [https://www.evidentlyai.com/llm-guide/llm-as-a-judge](https://www.evidentlyai.com/llm-guide/llm-as-a-judge))
+24. Vespa Blog. (Date Unknown). _Improving retrieval with LLM-as-a-judge_. (URL: [https://blog.vespa.ai/improving-retrieval-with-llm-as-a-judge/](https://blog.vespa.ai/improving-retrieval-with-llm-as-a-judge/))
+25. Kroll, B., et al. (2024). Evaluating LLM-Based Abstractive Summarization for Spoken Language Documents. _Interspeech 2024_. (URL: [https://www.isca-archive.org/interspeech_2024/kroll24_interspeech.pdf](https://www.isca-archive.org/interspeech_2024/kroll24_interspeech.pdf))
+26. Reddit r/LocalLLaMA. (Date Unknown). _What's the best LLM for summarization of long documents?_ (URL: [https://www.reddit.com/r/LocalLLaMA/comments/1891o5m/whats_the_best_llm_for_summarization_of_long/](https://www.reddit.com/r/LocalLLaMA/comments/1891o5m/whats_the_best_llm_for_summarization_of_long/))
+27. Pondhouse Data Blog. (Date Unknown). _Advanced RAG: Improving Retrieval-Augmented Generation with Hypothetical Document Embeddings (HyDE)_. (URL: [https://www.pondhouse-data.com/blog/advanced-rag-hypothetical-document-embeddings](https://www.pondhouse-data.com/blog/advanced-rag-hypothetical-document-embeddings))
+28. Epsilla Blog. (Date Unknown). _Demystifying RAG-Empowered Chat Agents: Aligning Question and Document Embedding Spaces with HyDE_. (URL: [https://www.epsilla.com/blogs/demystifying-rag-empowered-chat-agents-aligning-question-and-document-embedding-spaces-with-hyde](https://www.epsilla.com/blogs/demystifying-rag-empowered-chat-agents-aligning-question-and-document-embedding-spaces-with-hyde))
+29. Gao, L., et al. (2023). Precise Zero-Shot Dense Retrieval without Relevance Labels. _Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)_. (URL: [https://aclanthology.org/2023.acl-long.99/](https://aclanthology.org/2023.acl-long.99/))
+30. Gao, L., et al. (2022). Precise Zero-Shot Dense Retrieval without Relevance Labels. _arXiv preprint arXiv:2212.10496_. (URL: [https://arxiv.org/pdf/2212.10496](https://arxiv.org/pdf/2212.10496))
+31. Chen, Z., et al. (2024). SL-HyDE: Self-Learning Hypothetical Document Embeddings for Zero-Shot Medical Information Retrieval. _arXiv preprint arXiv:2410.20050_. (URL: [https://arxiv.org/html/2410.20050v1](https://arxiv.org/html/2410.20050v1))
+32. Gao, L., et al. (2022). Precise Zero-Shot Dense Retrieval without Relevance Labels. _arXiv abstract arXiv:2212.10496_. (URL: [https://arxiv.org/abs/2212.10496](https://arxiv.org/abs/2212.10496))
+33. Mackenzie, J., et al. (2024). Real Document Embeddings from Relevance Feedback. _arXiv preprint arXiv:2410.21242_. (URL: [https://arxiv.org/html/2410.21242v1](https://arxiv.org/html/2410.21242v1))
+34. Chen, Z., et al. (2024). SL-HyDE: Self-Learning Hypothetical Document Embeddings for Zero-Shot Medical Information Retrieval. _arXiv abstract arXiv:2410.20050_. (URL: [https://arxiv.org/abs/2410.20050](https://arxiv.org/abs/2410.20050))
+35. Zhao, Z., et al. (2025). Debater: Enhancing Dense Retrieval by Unleasing the Deliberate Thinking Ability of Large Language Models. _arXiv preprint arXiv:2502.12974_. (URL: [https://arxiv.org/html/2502.12974v1](https://arxiv.org/html/2502.12974v1))
+36. Singh, A., et al. (2023). Adapted Dense Retrieval: A General Approach for Improving Task-Specific Dense Retrieval. _arXiv preprint arXiv:2310.05380_. (URL: [https://arxiv.org/pdf/2310.05380](https://arxiv.org/pdf/2310.05380))
+37. Superlinked VectorHub Articles. (Date Unknown). _Optimizing RAG With Hybrid Search & Reranking_. (URL: [https://superlinked.com/vectorhub/articles/optimizing-rag-with-hybrid-search-reranking](https://superlinked.com/vectorhub/articles/optimizing-rag-with-hybrid-search-reranking))
+38. OpenAI Community Forum. (2023). _Embeddings giving incorrect results_. (URL: [https://community.openai.com/t/embeddings-giving-incorrect-results/360735](https://community.openai.com/t/embeddings-giving-incorrect-results/360735))
+39. Ghosh, S., et al. (2024). Hybrid Information Retrieval with Joint Learning of Sparse Lexical and Dense Semantic Representations. _arXiv preprint arXiv:2405.13173_. (URL: [https://arxiv.org/html/2405.13173v1](https://arxiv.org/html/2405.13173v1))
+40. LF Technology Blog. (Date Unknown). _Unlocking RAG Potential: Enhancing Retrieval Through Reranking_. (URL: [https://lftechnology.com/blog/unlocking-rag-potential-retrieval-through-reranking](https://lftechnology.com/blog/unlocking-rag-potential-retrieval-through-reranking))
+41. Elastic Search Labs Blog. (Date Unknown). _Introducing the Elastic Semantic Reranker - Part 1: Improving Relevance with Semantic Reranking_. (URL: [https://www.elastic.co/search-labs/blog/elastic-semantic-reranker-part-1](https://www.elastic.co/search-labs/blog/elastic-semantic-reranker-part-1))
+42. Elastic Search Labs Blog. (Date Unknown). _Semantic Reranking with Retrievers_. (URL: [https://www.elastic.co/search-labs/blog/semantic-reranking-with-retrievers](https://www.elastic.co/search-labs/blog/semantic-reranking-with-retrievers))
+43. Amazon Science Blog. (Date Unknown). _From structured search to learning to rank and retrieve_. (URL: [https://www.amazon.science/blog/from-structured-search-to-learning-to-rank-and-retrieve](https://www.amazon.science/blog/from-structured-search-to-learning-to-rank-and-retrieve))
+44. Weaviate Blog. (2022). _Cross-Encoders as Reranker_. (URL: [https://weaviate.io/blog/cross-encoders-as-reranker](https://weaviate.io/blog/cross-encoders-as-reranker))
+45. Elasticsearch Reference. (Current). _Semantic reranking_. (URL: [https://www.elastic.co/guide/en/elasticsearch/reference/current/semantic-reranking.html](https://www.elastic.co/guide/en/elasticsearch/reference/current/semantic-reranking.html))
+46. Osanseviero Blog. (Date Unknown). _Sentence Embeddings Part 2: Cross-Encoders_. (URL: [https://osanseviero.github.io/hackerllama/blog/posts/sentence_embeddings2/](https://osanseviero.github.io/hackerllama/blog/posts/sentence_embeddings2/))
+47. DeepLearning.AI Community. (2024). _Crossencoder Re-ranking_. (URL: [https://community.deeplearning.ai/t/crossencoder-re-ranking/537938](https://community.deeplearning.ai/t/crossencoder-re-ranking/537938))
+48. OpenAI Cookbook. (Date Unknown). _Search Reranking with Cross-Encoders_. (URL: [https://cookbook.openai.com/examples/search_reranking_with_cross-encoders](https://cookbook.openai.com/examples/search_reranking_with_cross-encoders))
+49. Elastic Search Labs Blog. (Date Unknown). _Elasticsearch Cross-Encoder Reranker with HuggingFace_. (URL: [https://www.elastic.co/search-labs/blog/elasticsearch-cross-encoder-reranker-huggingface](https://www.elastic.co/search-labs/blog/elasticsearch-cross-encoder-reranker-huggingface))
+50. Elasticsearch Reference. (Current). _Learning to rank (LTR)_. (URL: [https://www.elastic.co/guide/en/elasticsearch/reference/current/learning-to-rank.html](https://www.elastic.co/guide/en/elasticsearch/reference/current/learning-to-rank.html))
+51. Towards Data Science. (Date Unknown). _Introduction to Ranking Algorithms_. (URL: [https://towardsdatascience.com/introduction-to-ranking-algorithms-4e4639d65b8](https://towardsdatascience.com/introduction-to-ranking-algorithms-4e4639d65b8))
+52. Wikipedia. (Date Unknown). _Learning to rank_. (URL: [https://en.wikipedia.org/wiki/Learning_to_rank](https://en.wikipedia.org/wiki/Learning_to_rank))
+53. Liu, T. Y. (2009). Learning to Rank for Information Retrieval. _Foundations and Trends® in Information Retrieval, 3_(3), 225-331. (Referenced via URL: [https://dmice.ohsu.edu/bedricks/courses/cs635_spring_2017/pdf/liu_2009.pdf](https://dmice.ohsu.edu/bedricks/courses/cs635_spring_2017/pdf/liu_2009.pdf))
+54. Liu, T. Y. (2009). _Learning to Rank for Information Retrieval (Tutorial Slides)_. (Referenced via URL: [https://didawiki.cli.di.unipi.it/lib/exe/fetch.php/magistraleinformatica/ir/ir13/1\_-_learning_to_rank.pdf](https://didawiki.cli.di.unipi.it/lib/exe/fetch.php/magistraleinformatica/ir/ir13/1_-_learning_to_rank.pdf))
+55. Havrylov, S. (Date Unknown). _Learning to Rank_. Blog Post. (URL: [https://hav4ik.github.io/learning-to-rank/](https://hav4ik.github.io/learning-to-rank/))
+56. OpenAI Community Forum. (2023). _Foundational / Must-Read GPT / LLM Papers_. (URL: [https://community.openai.com/t/foundational-must-read-gpt-llm-papers/197003?page=3](https://community.openai.com/t/foundational-must-read-gpt-llm-papers/197003?page=3))
+57. Li, J., et al. (2024). Evaluating Retrieval-Augmented Generation Systems with Generated Multi-hop Questions. _arXiv preprint arXiv:2412.12300_. (URL: [https://arxiv.org/html/2412.12300v1](https://arxiv.org/html/2412.12300v1))
+58. Reddit r/LocalLLaMA. (2023). _Explain Reranking_. (URL: [https://www.reddit.com/r/LocalLLaMA/comments/1ayka0f/explain_reranking/](https://www.reddit.com/r/LocalLLaMA/comments/1ayka0f/explain_reranking/))
+59. Pal, C., et al. (2024). Automated Exam Generation for Evaluating Retrieval-Augmented Large Language Models (RAG). _arXiv preprint arXiv:2405.13622_. (URL: [https://arxiv.org/html/2405.13622v1](https://arxiv.org/html/2405.13622v1))
+60. Wang, X., et al. (2024). A Survey on Evaluation of Retrieval-Augmented Generation. _arXiv preprint arXiv:2405.07437_. (URL: [https://arxiv.org/html/2405.07437v2](https://arxiv.org/html/2405.07437v2))
